@@ -5,6 +5,7 @@ import time
 import zipfile
 from github import Github
 from dotenv import load_dotenv
+from datetime import date
 
 load_dotenv()
 
@@ -19,7 +20,7 @@ DEBUG_file_counter = 0
 # TODO filter out repos that have no .c files (fx only .h) - search/code
 
 
-# obsolete
+# !!! obsolete
 def get_repos(top: int = 100, pages: int = 10):
     """
     Find and download top 100 repositories that contain C code
@@ -47,9 +48,8 @@ def get_random_repos(nr_repos: int):
     repos = []
 
     while len(repos) < nr_repos:
-        # TODO add a date generator
         query_params = {
-            'q': f'language:c pushed:{random.randint(2014, 2023)}-{random.randint(1, 12):02}',
+            'q': f'language:c pushed:{get_formatted_date()}',
             'per_page': 100,
             'page': random.randint(1, 10)
         }
@@ -73,6 +73,29 @@ def get_random_repos(nr_repos: int):
     print(repos)  # debug
     for repo in repos:
         download_repo(repo)
+
+
+def get_random_date() -> (int, int):
+    """
+    Return a tuple with randomly chosen year and month
+    Range between January 10 years ago and current year & month
+    """
+    current_year = date.today().year
+    current_month = date.today().month
+    # lower boundary: 10 years ago, converted to months
+    range_from = (current_year - 10) * 12
+    # upper boundary: current month
+    range_to = (current_year * 12) + (current_month - 1)
+    rand_month = random.randint(range_from, range_to)
+    return rand_month // 12, (rand_month % 12 + 1)
+
+
+def get_formatted_date() -> str:
+    """
+    Convert randomly generated date to a format suitable for GitHub search queries
+    """
+    y, m = get_random_date()
+    return f'{y}-{m:02}'
 
 
 def download_repo(full_name: str):
