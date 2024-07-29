@@ -4,8 +4,11 @@ import random
 import time
 import zipfile
 from github import Github
+from dotenv import load_dotenv
 
-TOKEN = ''
+load_dotenv()
+
+TOKEN = os.getenv('API_KEY')
 HEADERS = {'Authorization': f'token {TOKEN}'}
 BASE_ENDPOINT = 'https://api.github.com'
 SAVE_DIR = 'scraped_code'
