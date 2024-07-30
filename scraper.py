@@ -14,31 +14,11 @@ HEADERS = {'Authorization': f'token {TOKEN}'}
 BASE_ENDPOINT = 'https://api.github.com'
 SAVE_DIR = 'scraped_code'
 SIZE_LIMIT_KB = 20480
+DOWNLOAD_COUNT = 0
 
 DEBUG_file_counter = 0
 
 # TODO filter out repos that have no .c files (fx only .h) - search/code
-
-
-# !!! obsolete
-def get_repos(top: int = 100, pages: int = 10):
-    """
-    Find and download top 100 repositories that contain C code
-    """
-    url = f'{BASE_ENDPOINT}/search/repositories?q=language:C'  # &sort=stars&order=asc
-    # (only checks the first page)
-    response = requests.get(url, headers=HEADERS, params={'per_page': 100})
-    response.raise_for_status()
-    # print remaining limit at the start
-    check_rate(response, 'Repo search')
-    results = response.json()
-    repos = results['items'][:top]
-    for repo in repos:
-        repo_name = repo['full_name']
-        get_code_files(repo_name, pages)
-        print(f'Downloaded: {repo_name}')
-    # when done making requests, print remaining limit
-    check_rate(response, 'Repo search')
 
 
 def get_random_repos(nr_repos: int):
@@ -102,16 +82,17 @@ def download_repo(full_name: str):
     """
     TODO rate limit check
     """
-    global DEBUG_file_counter
-    DEBUG_file_counter = 0
-
+    # global DEBUG_file_counter
+    # DEBUG_file_counter = 0
+    global DOWNLOAD_COUNT
     start_time = time.time()
 
-    g = Github(TOKEN)
-    repo = g.get_repo(full_name)
-    repo_contents = repo.get_contents('')
+    # g = Github(TOKEN)
+    # repo = g.get_repo(full_name)
+    # repo_contents = repo.get_contents('')
     tar_path = os.path.join(SAVE_DIR, full_name.replace('/', '.'))
 
+    """
     def download_files(contents: list):
         global DEBUG_file_counter
 
@@ -130,29 +111,57 @@ def download_repo(full_name: str):
             except Exception as e:
                 print(f'Error downloading file: {content.path}')
                 print(e)
+    """
 
     # get latest release if it's available
     release = requests.get(f'{BASE_ENDPOINT}/repos/{full_name}/releases/latest')
     if release.status_code == 200:
-        response = requests.get(release.json()['zipball_url'])
-        response.raise_for_status()
-        zip_path = f'{tar_path}.zip'
-        os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-        with open(zip_path, 'wb') as f:
-            f.write(response.content)
-            DEBUG_file_counter += 1
-        # open and extract the zip file
-        with zipfile.ZipFile(zip_path, 'r') as f:
-            f.extractall(tar_path)
-    # if there's no release, just download files in main
+        dwnld_url = release.json()['zipball_url']
+    # if there's no release, just get current state of the main branch
     elif release.status_code == 404:
-        download_files(repo_contents)
+        dwnld_url = f'{BASE_ENDPOINT}/repos/{full_name}/zipball'
+        # download_files(repo_contents)
     else:
-        print(f'Did not download {full_name}, status code {release.status_code}')
+        print(f'Could not download {full_name}, status code {release.status_code}')
         return
 
+    response = requests.get(dwnld_url)
+    response.raise_for_status()
+    zip_path = f'{tar_path}.zip'
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    with open(zip_path, 'wb') as f:
+        f.write(response.content)
+        # DEBUG_file_counter += 1
+    # open and extract the zip file
+    with zipfile.ZipFile(zip_path, 'r') as f:
+        f.extractall(tar_path)
+
     end_time = time.time()
-    print(f'Downloaded {full_name}: {DEBUG_file_counter} files, {round(end_time - start_time)}s')
+    DOWNLOAD_COUNT += 1
+    # print(f'Downloaded {full_name}: {DEBUG_file_counter} files, {round(end_time - start_time)}s')
+    print(f'Downloaded {full_name} in {round(end_time - start_time)}s')
+
+
+# obsolete functions
+'''
+def get_repos(top: int = 100, pages: int = 10):
+    """
+    Find and download top 100 repositories that contain C code
+    """
+    url = f'{BASE_ENDPOINT}/search/repositories?q=language:C'  # &sort=stars&order=asc
+    # (only checks the first page)
+    response = requests.get(url, headers=HEADERS, params={'per_page': 100})
+    response.raise_for_status()
+    # print remaining limit at the start
+    check_rate(response, 'Repo search')
+    results = response.json()
+    repos = results['items'][:top]
+    for repo in repos:
+        repo_name = repo['full_name']
+        get_code_files(repo_name, pages)
+        print(f'Downloaded: {repo_name}')
+    # when done making requests, print remaining limit
+    check_rate(response, 'Repo search')
 
 
 def get_code_files(repo_name: str, pages: int = 10):
@@ -199,6 +208,7 @@ def download_file(url: str, save_path: str):
     # check_rate(response, "download file")
     with open(save_path, 'wb') as f:
         f.write(response.content)
+'''
 
 
 def check_rate(response: requests.Response, note: str = "General"):
@@ -211,11 +221,9 @@ def check_rate(response: requests.Response, note: str = "General"):
 
 
 def main():
-    # get_repos(top=2, pages=1)
-    # get_random_repos(5)
-    # exit()
-    
-    get_random_repos(20)
+    download_limit = 5
+    while DOWNLOAD_COUNT < download_limit:
+        get_random_repos(download_limit)
 
 
 if __name__ == "__main__":
