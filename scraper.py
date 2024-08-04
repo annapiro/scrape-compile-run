@@ -16,43 +16,47 @@ SAVE_DIR = 'scraped_code'
 SIZE_LIMIT_KB = 20480
 DOWNLOAD_COUNT = 0
 
-DEBUG_file_counter = 0
-
 # TODO filter out repos that have no .c files (fx only .h) - search/code
 
 
-def get_random_repos(nr_repos: int):
+def get_random_repo() -> str:
+    """
+    TODO
+    """
     url = f'{BASE_ENDPOINT}/search/repositories'
-    g = Github(TOKEN)
+    g = Github(TOKEN)  # TODO it's literally only used for one line of code
 
-    repos = []
-
-    while len(repos) < nr_repos:
+    while True:
         query_params = {
             'q': f'language:c pushed:{get_formatted_date()}',
             'per_page': 100,
             'page': random.randint(1, 10)
         }
-        # print(query_params)
         response = requests.get(url, headers=HEADERS, params=query_params)
         response.raise_for_status()
         results = response.json()
         # get random repo from the selected page
         repo = g.get_repo(results['items'][random.randint(0, 99)]['full_name'])
         # output some query stats to the console
-        print(f"{repo.full_name}\n"
-              f"{query_params['q'].split()[1]}\tpage:{query_params['page']}\tsize:{repo.size/1024:.2f} MB")
-        # filter out repos a bit - limit by total size and don't include whatever calls itself a 'library'
-        if repo.size <= SIZE_LIMIT_KB and 'library' not in str(repo.description):
-            repos.append(repo.full_name)
-        # repos.append(results['items'][random.randint(0, 99)])
-    if response:
-        check_rate(response, 'Repo search')
+        print(f"\nFound {repo.full_name}")
+        print(f"{query_params['q'].split()[1]}\tpage:{query_params['page']}\tsize:{repo.size/1024:.2f} MB")
+        # limit by total size
+        if repo.size > SIZE_LIMIT_KB:
+            print("Size limit exceeded!")
+            continue
+        # don't include whatever calls itself a 'library'
+        if 'library' in str(repo.description):
+            print("May be a library!")
+            continue
+        return repo.full_name
 
-    # repos = [repo['full_name'] for repo in repos]
-    print(repos)  # debug
-    for repo in repos:
-        download_repo(repo)
+
+def get_formatted_date() -> str:
+    """
+    Convert randomly generated date to a format suitable for GitHub search queries
+    """
+    y, m = get_random_date()
+    return f'{y}-{m:02}'
 
 
 def get_random_date() -> (int, int):
@@ -70,100 +74,43 @@ def get_random_date() -> (int, int):
     return rand_month // 12, (rand_month % 12 + 1)
 
 
-def get_formatted_date() -> str:
-    """
-    Convert randomly generated date to a format suitable for GitHub search queries
-    """
-    y, m = get_random_date()
-    return f'{y}-{m:02}'
-
-
 def download_repo(full_name: str):
     """
-    TODO rate limit check
+    TODO
     """
-    # global DEBUG_file_counter
-    # DEBUG_file_counter = 0
     global DOWNLOAD_COUNT
     start_time = time.time()
 
-    # g = Github(TOKEN)
-    # repo = g.get_repo(full_name)
-    # repo_contents = repo.get_contents('')
-    tar_path = os.path.join(SAVE_DIR, full_name.replace('/', '.'))
-
-    """
-    def download_files(contents: list):
-        global DEBUG_file_counter
-
-        for content in contents:
-            try:
-                if content.type == 'dir':
-                    download_files(repo.get_contents(content.path))
-                # filter for C-related files
-                elif content.name.endswith('.c') or content.name.endswith('.h') or content.name in ['Makefile', 'CMakeLists.txt']:
-                    file_content = repo.get_contents(content.path).decoded_content
-                    file_path = os.path.join(tar_path, content.path)
-                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    with open(file_path, 'wb') as f:
-                        f.write(file_content)
-                        DEBUG_file_counter += 1
-            except Exception as e:
-                print(f'Error downloading file: {content.path}')
-                print(e)
-    """
-
     # get latest release if it's available
-    release = requests.get(f'{BASE_ENDPOINT}/repos/{full_name}/releases/latest')
+    release = requests.get(f'{BASE_ENDPOINT}/repos/{full_name}/releases/latest', headers=HEADERS)
     if release.status_code == 200:
-        dwnld_url = release.json()['zipball_url']
+        release_json = release.json()
+        dwnld_url = release_json['zipball_url']
+        dwnld_type = release_json['tag_name']
     # if there's no release, just get current state of the main branch
     elif release.status_code == 404:
         dwnld_url = f'{BASE_ENDPOINT}/repos/{full_name}/zipball'
-        # download_files(repo_contents)
+        dwnld_type = 'main'
     else:
-        print(f'Could not download {full_name}, status code {release.status_code}')
+        print(f'Not downloaded, status code {release.status_code}')
         return
 
-    response = requests.get(dwnld_url)
+    response = requests.get(dwnld_url, headers=HEADERS)
     response.raise_for_status()
-    zip_path = f'{tar_path}.zip'
-    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    zip_path = os.path.join(SAVE_DIR, full_name.replace('/', '-') + '.zip')
     with open(zip_path, 'wb') as f:
         f.write(response.content)
-        # DEBUG_file_counter += 1
     # open and extract the zip file
     with zipfile.ZipFile(zip_path, 'r') as f:
-        f.extractall(tar_path)
+        f.extractall(SAVE_DIR)
 
     end_time = time.time()
     DOWNLOAD_COUNT += 1
-    # print(f'Downloaded {full_name}: {DEBUG_file_counter} files, {round(end_time - start_time)}s')
-    print(f'Downloaded {full_name} in {round(end_time - start_time)}s')
+    print(f'Downloaded {full_name} ({dwnld_type}) in {round(end_time - start_time)}s')
 
 
 # obsolete functions
 '''
-def get_repos(top: int = 100, pages: int = 10):
-    """
-    Find and download top 100 repositories that contain C code
-    """
-    url = f'{BASE_ENDPOINT}/search/repositories?q=language:C'  # &sort=stars&order=asc
-    # (only checks the first page)
-    response = requests.get(url, headers=HEADERS, params={'per_page': 100})
-    response.raise_for_status()
-    # print remaining limit at the start
-    check_rate(response, 'Repo search')
-    results = response.json()
-    repos = results['items'][:top]
-    for repo in repos:
-        repo_name = repo['full_name']
-        get_code_files(repo_name, pages)
-        print(f'Downloaded: {repo_name}')
-    # when done making requests, print remaining limit
-    check_rate(response, 'Repo search')
-
-
 def get_code_files(repo_name: str, pages: int = 10):
     """
     Get links to the actual code files
@@ -199,31 +146,44 @@ def get_code_files(repo_name: str, pages: int = 10):
     check_rate(file_response)
 
 
-def download_file(url: str, save_path: str):
-    """
-    Download a single file given its raw url
-    """
-    response = requests.get(url)
-    response.raise_for_status()
-    # check_rate(response, "download file")
-    with open(save_path, 'wb') as f:
-        f.write(response.content)
+def download_files(contents: list):
+    for content in contents:
+        try:
+            if content.type == 'dir':
+                download_files(repo.get_contents(content.path))
+            # filter for C-related files
+            elif content.name.endswith('.c') or content.name.endswith('.h') or content.name in ['Makefile', 'CMakeLists.txt']:
+                file_content = repo.get_contents(content.path).decoded_content
+                file_path = os.path.join(tar_path, content.path)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                with open(file_path, 'wb') as f:
+                    f.write(file_content)
+        except Exception as e:
+            print(f'Error downloading file: {content.path}')
+            print(e)
 '''
 
 
-def check_rate(response: requests.Response, note: str = "General"):
+def check_rate_limits():
     """
     Print the number of remaining requests
     """
-    rate_now = int(response.headers['x-ratelimit-remaining'])
-    rate_max = int(response.headers['x-ratelimit-limit'])
-    print(f"{note} requests left: {rate_now}/{rate_max}")
+    r = requests.get(f'{BASE_ENDPOINT}/rate_limit', headers=HEADERS).json()
+    print(f"\nRate limit status"
+          f"\n{r['resources']['core']['remaining']}/{r['resources']['core']['limit']}\tcore"
+          f"\n{r['resources']['search']['remaining']}/{r['resources']['search']['limit']}\t\tsearch"
+          f"\n{r['resources']['code_search']['remaining']}/{r['resources']['code_search']['limit']}\t\tcode search")
 
 
 def main():
     download_limit = 5
     while DOWNLOAD_COUNT < download_limit:
-        get_random_repos(download_limit)
+        random_repo = get_random_repo()
+        download_repo(random_repo)
+        check_rate_limits()
+    # clean up zip files
+    for z in [f for f in os.listdir(SAVE_DIR) if f.endswith('zip')]:
+        os.remove(os.path.join(SAVE_DIR, z))
 
 
 if __name__ == "__main__":
