@@ -14,7 +14,7 @@ TOKEN = os.getenv('API_KEY')
 HEADERS = {'Authorization': f'token {TOKEN}'}
 BASE_ENDPOINT = 'https://api.github.com'
 SAVE_DIR = 'scraped_code'
-SIZE_LIMIT = int(os.getenv('SIZE_LIMIT'))  # size limit for downloading repos in KB
+SIZE_LIMIT = float(os.getenv('SIZE_LIMIT'))  # size limit for downloading repos in KB
 DOWNLOAD_COUNT = 0
 
 
@@ -119,6 +119,7 @@ def download_repo(full_name: str):
     response = requests.get(dwnld_url, headers=HEADERS)
     response.raise_for_status()
     zip_path = os.path.join(SAVE_DIR, full_name.replace('/', '-') + '.zip')
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
     with open(zip_path, 'wb') as f:
         f.write(response.content)
     # open and extract the zip file
