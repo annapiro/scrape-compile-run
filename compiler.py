@@ -1,5 +1,6 @@
 import subprocess
 import os
+import argparse
 
 MAIN_DIR = 'scraped_code'
 # MAKE_PATH = r'C:\Program Files (x86)\GnuWin32\bin\make.exe'
@@ -29,6 +30,9 @@ def compile_and_get_executable_paths(path: str) -> list[str]:
 
 
 if __name__ == "__main__":
-    test_repo_dir = ''
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dirpath")
+    args = parser.parse_args()
+    test_repo_dir = args.dirpath
     compile_path = os.path.join(MAIN_DIR, test_repo_dir)
     print(compile_and_get_executable_paths(compile_path))

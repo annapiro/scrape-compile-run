@@ -55,7 +55,7 @@ def is_eligible_repo(repo: Repository) -> bool:
         print("Repo already exists!")
         return False
     # limit by total size
-    if repo.size > SIZE_LIMIT:
+    if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
         print("Size limit exceeded!")
         return False
     # don't include whatever calls itself a 'library'
@@ -63,7 +63,7 @@ def is_eligible_repo(repo: Repository) -> bool:
         print("May be a library!")
         return False
     # check that it contains at least one .c file
-    response = requests.get('https://api.github.com/search/code',
+    response = requests.get(f'{BASE_ENDPOINT}/search/code',
                             headers=HEADERS,
                             params={'q': f'repo:{repo.full_name} extension:c'})
     if response.json()['total_count'] == 0:
