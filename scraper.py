@@ -135,12 +135,12 @@ def check_rate_limits():
     Print the number of remaining requests
     """
     r = requests.get(f'{BASE_ENDPOINT}/rate_limit', headers=HEADERS).json()
-    print(f"\nRate limit status"
-          f"\n{r['resources']['core']['remaining']}/{r['resources']['core']['limit']}\tcore"
-          f"\n{r['resources']['search']['remaining']}/{r['resources']['search']['limit']}\t\tsearch"
-          f"\n{r['resources']['code_search']['remaining']}/{r['resources']['code_search']['limit']}\t\tcode search")
+    # print(f"\nRate limit status"
+    #       f"\n{r['resources']['core']['remaining']}/{r['resources']['core']['limit']}\tcore"
+    #       f"\n{r['resources']['search']['remaining']}/{r['resources']['search']['limit']}\t\tsearch"
+    #       f"\n{r['resources']['code_search']['remaining']}/{r['resources']['code_search']['limit']}\t\tcode search")
     if r['resources']['search']['remaining'] < 2 or r['resources']['code_search']['remaining'] < 2:
-        print("Waiting for 60s...")
+        print("\nWaiting for 60s...")
         time.sleep(60)
 
 
