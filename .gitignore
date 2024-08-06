@@ -1,4 +1,4 @@
 .idea
 .venv
 .env
-scraped_code
+out

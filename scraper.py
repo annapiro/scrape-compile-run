@@ -13,7 +13,7 @@ load_dotenv()
 TOKEN = os.getenv('API_KEY')
 HEADERS = {'Authorization': f'token {TOKEN}'}
 BASE_ENDPOINT = 'https://api.github.com'
-SAVE_DIR = 'scraped_code'
+SAVE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
 SIZE_LIMIT = float(os.getenv('SIZE_LIMIT'))  # size limit for downloading repos in KB
 DOWNLOAD_COUNT = 0
 
