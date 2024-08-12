@@ -47,6 +47,7 @@ def move_compiled_files(compiled_paths: list[str]):
     for item_path in compiled_paths:
         if os.path.isfile(item_path):
             new_path = item_path.replace(SOURCE_DIR, OUT_DIR, 1)
+            os.makedirs(new_path, exist_ok=True)
             shutil.move(item_path, new_path)
             print(f'New: {new_path}')
 
