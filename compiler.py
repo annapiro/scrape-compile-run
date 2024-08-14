@@ -80,7 +80,7 @@ def save_dir_structure(path: str, fname: str):
     List paths of all files and dirs contained in a root directory
     Save the output in a file
     """
-    with open(fname, 'w') as f:
+    with open(fname, 'w', encoding='utf-8') as f:
         for root, dirs, files in os.walk(path):
             for name in dirs:
                 f.write(os.path.join(root, name) + '\n')
@@ -92,9 +92,9 @@ def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
     """
     Given two files (before and after changes), list new paths that were added
     """
-    with open(before_file, 'r') as f:
+    with open(before_file, 'r', encoding='utf-8') as f:
         before = set(f.read().splitlines())
-    with open(after_file, 'r') as f:
+    with open(after_file, 'r', encoding='utf-8') as f:
         after = set(f.read().splitlines())
     return list(after - before)
 
@@ -116,12 +116,7 @@ def clean_up(files_to_rm: list[str]):
         os.remove(f)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('dirpath')
-    args = parser.parse_args()
-    repo_path = os.path.join(SOURCE_DIR, args.dirpath)
-    
+def process_repo(repo_path: str):
     before = 'before.txt'
     after = 'after.txt'
 
@@ -137,25 +132,38 @@ def main():
         do_compile(repo_path)
     elif os.path.isfile(cmakelists_path):
         do_compile(repo_path, cmakelists_path)
+    else:
+        # walk the repo and find the next best option
+        makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
 
-    # walk the repo and find the next best option
-    makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
-
-    if makefiles:
-        makefile_path = find_best_file(makefiles)
-        makefile_dir = os.path.dirname(makefile_path)
-        do_compile(makefile_dir)
-    elif cmakelists:
-        cmakelists_path = find_best_file(cmakelists)
-        do_compile(repo_path, cmakelists_path)
-    elif cfiles:
-        compile_cfiles_directly(cfiles)
+        if makefiles:
+            makefile_path = find_best_file(makefiles)
+            makefile_dir = os.path.dirname(makefile_path)
+            do_compile(makefile_dir)
+        elif cmakelists:
+            cmakelists_path = find_best_file(cmakelists)
+            do_compile(repo_path, cmakelists_path)
+        elif cfiles:
+            compile_cfiles_directly(cfiles)
+        else:
+            print(f'No condition triggered: {repo_path}')
 
     save_dir_structure(repo_path, after)
-    
+
     diff = compare_dir_structure(before, after)
     move_compiled_files(diff)
     clean_up([before, after])
+
+
+def main():
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('dirpath')
+    # args = parser.parse_args()
+
+    repos = os.scandir(SOURCE_DIR)
+    for entry in repos:
+        if entry.is_dir():
+            process_repo(entry.path)
 
 
 if __name__ == "__main__":
