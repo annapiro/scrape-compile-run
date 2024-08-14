@@ -2,16 +2,20 @@ import subprocess
 import os
 import argparse
 import shutil
+import csv
 from dotenv import load_dotenv
+from datetime import datetime
+
 
 load_dotenv()
 
 # get directory paths and replace path separators with ones used by the system
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
 OUT_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
+LOG_DIR = os.path.join(*os.getenv('LOG_DIR').split('/'))
 
 
-def do_compile(path: str, cmakelists: str = None):
+def do_compile(path: str, cmakelists: str = None) -> (list, str, str):
     """
     :param path: Directory where Makefile is located or will be generated
     :param cmakelists: Path to CMakeLists.txt if it needs to be run first
@@ -19,9 +23,16 @@ def do_compile(path: str, cmakelists: str = None):
     # run CMakeLists.txt first if it's available
     # TODO what flags does cmake need?
     if cmakelists:
-        subprocess.run(['cmake', cmakelists], cwd=path, check=True)
+        command = ['cmake', cmakelists]
+        # return command, 'dummy', 'dummy'
+        result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            return command, result.stdout, result.stderr
     # run Makefile
-    subprocess.run(['make', 'V=1'], cwd=path, check=True)
+    command = ['make', 'V=1']
+    # return command, 'dummy', 'dummy'
+    result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return command, result.stdout, result.stderr
 
 
 def get_relevant_files(root_path: str) -> (list, list, list):
@@ -69,10 +80,12 @@ def find_best_file(file_list: list) -> str:
     return file_list[0][0]
 
 
-def compile_cfiles_directly(cfiles: list):
+def compile_cfiles_directly(cfiles: list) -> (list, str, str):
     output_file = 'compiled_output'
     command = ['gcc'] + cfiles + ['-o', output_file]
-    subprocess.run(command, check=True)
+    # return command, 'dummy', 'dummy'
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr = subprocess.PIPE, text=True)
+    return command, result.stdout, result.stderr
 
 
 def save_dir_structure(path: str, fname: str):
@@ -116,6 +129,20 @@ def clean_up(files_to_rm: list[str]):
         os.remove(f)
 
 
+def update_log(repo_path: str, command: list, output: str, error: str):
+    log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
+    file_exists = os.path.isfile(log_file)
+    process = command[0] if command != 'None' else 'None'
+    args = str(command[1:]) if command != 'None' else 'None'
+    timestamp = datetime.now()
+
+    with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(['Repo', 'Process', 'Args', 'Output', 'Error', 'Timestamp'])
+        writer.writerow([os.path.basename(repo_path), process, args, output, error, timestamp])
+
+
 def process_repo(repo_path: str):
     before = 'before.txt'
     after = 'after.txt'
@@ -127,11 +154,12 @@ def process_repo(repo_path: str):
     makefile_path = os.path.join(repo_path, 'Makefile')
     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
 
-    # TODO error handling
+    result = ['None', 'None', 'None']
+
     if os.path.isfile(makefile_path):
-        do_compile(repo_path)
+        result = do_compile(repo_path)
     elif os.path.isfile(cmakelists_path):
-        do_compile(repo_path, cmakelists_path)
+        result = do_compile(repo_path, cmakelists_path)
     else:
         # walk the repo and find the next best option
         makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
@@ -139,14 +167,14 @@ def process_repo(repo_path: str):
         if makefiles:
             makefile_path = find_best_file(makefiles)
             makefile_dir = os.path.dirname(makefile_path)
-            do_compile(makefile_dir)
+            result = do_compile(makefile_dir)
         elif cmakelists:
             cmakelists_path = find_best_file(cmakelists)
-            do_compile(repo_path, cmakelists_path)
+            result = do_compile(repo_path, cmakelists_path)
         elif cfiles:
-            compile_cfiles_directly(cfiles)
-        else:
-            print(f'No condition triggered: {repo_path}')
+            result = compile_cfiles_directly(cfiles)
+
+    update_log(repo_path, *result)
 
     save_dir_structure(repo_path, after)
 
