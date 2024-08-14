@@ -1,6 +1,5 @@
 import subprocess
 import os
-import argparse
 import shutil
 import csv
 from dotenv import load_dotenv
@@ -19,23 +18,48 @@ def do_compile(path: str, cmakelists: str = None) -> (list, str, str):
     """
     :param path: Directory where Makefile is located or will be generated
     :param cmakelists: Path to CMakeLists.txt if it needs to be run first
+    :return: list of command arguments, stdout and stderr of the subprocess
     """
     # run CMakeLists.txt first if it's available
-    # TODO what flags does cmake need?
     if cmakelists:
+        # make CMakeLists.txt path relative to the repo root
         cmakelists = cmakelists.replace(path, '').strip(os.path.sep)
         print(f'Run cmake: {path}')
         command = ['cmake', cmakelists]
-        # return command, 'dummy', 'dummy'
-        result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
-        if result.returncode != 0:
-            return command, result.stdout, result.stderr
+        returncode, out, err = do_subprocess_run(command, path)
+        if returncode != 0:
+            return command, out, err
     # run Makefile
     print(f'Run make: {path}')
     command = ['make', 'V=1']
-    # return command, 'dummy', 'dummy'
-    result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
-    return command, result.stdout, result.stderr
+    _, out, err = do_subprocess_run(command, path)
+    return command, out, err
+
+
+def compile_cfiles_directly(repo_path: str, cfiles: list) -> (list, str, str):
+    output_file = 'compiled_output'
+    print(f'Run gcc: {repo_path}')
+    command = ['gcc'] + cfiles + ['-o', output_file]
+    _, out, err = do_subprocess_run(command, repo_path)
+    return command, out, err
+
+
+def do_subprocess_run(command: list, path: str) -> (int, str, str):
+    """
+    :return: subprocess return code, stdout and stderr
+    """
+    # return None, 'dummy', 'dummy'  # debug
+    try:
+        result = subprocess.run(command,
+                                cwd=path,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                timeout=60)
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired as e:
+        print('Timeout')
+        return None, None, str(e)
 
 
 def get_relevant_files(root_path: str) -> (list, list, list):
@@ -43,7 +67,7 @@ def get_relevant_files(root_path: str) -> (list, list, list):
     cmakelists = []
     cfiles = []
     
-    print(f'Check subdirectories: {root_path}')
+    print(f'Walk subdirs: {root_path}')
     # TODO stop checking for other types once a higher-priority type is found
     for root, _, files in os.walk(root_path):
         for f in files:
@@ -60,7 +84,6 @@ def get_relevant_files(root_path: str) -> (list, list, list):
 
 def assign_priority_score(root_path: str, file_path: str) -> (int, int):
     priority = 0
-
     keyword_priority = {
         'src': 2,
         'source': 2,
@@ -82,15 +105,6 @@ def assign_priority_score(root_path: str, file_path: str) -> (int, int):
 def find_best_file(file_list: list) -> str:
     file_list.sort(key=lambda x: (x[1], x[2]), reverse=True)
     return file_list[0][0]
-
-
-def compile_cfiles_directly(repo_path: str, cfiles: list) -> (list, str, str):
-    output_file = 'compiled_output'
-    command = ['gcc'] + cfiles + ['-o', output_file]
-    # return command, 'dummy', 'dummy'
-    print(f'Run gcc: {repo_path}')
-    result = subprocess.run(command, cwd=repo_path, stdout=subprocess.PIPE, stderr = subprocess.PIPE, text=True, timeout=60)
-    return command, result.stdout, result.stderr
 
 
 def save_dir_structure(path: str, fname: str):
@@ -137,8 +151,8 @@ def clean_up(files_to_rm: list[str]):
 def update_log(repo_path: str, command: list, output: str, error: str):
     log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
     file_exists = os.path.isfile(log_file)
-    process = command[0] if command != 'None' else 'None'
-    args = command[1:] if command != 'None' else 'None'
+    process = command[0] if command else 'None'
+    args = command[1:] if command else ''
     if len(args) > 5:
         args = f'(...) {args[-5:]}'
     
@@ -162,7 +176,7 @@ def process_repo(repo_path: str):
     makefile_path = os.path.join(repo_path, 'Makefile')
     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
 
-    result = ['None', 'None', 'None']
+    result = [None, None, None]
 
     if os.path.isfile(makefile_path):
         result = do_compile(repo_path)
@@ -193,10 +207,6 @@ def process_repo(repo_path: str):
 
 
 def main():
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('dirpath')
-    # args = parser.parse_args()
-
     repos = os.scandir(SOURCE_DIR)
     for entry in repos:
         if entry.is_dir():
