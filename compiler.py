@@ -23,15 +23,18 @@ def do_compile(path: str, cmakelists: str = None) -> (list, str, str):
     # run CMakeLists.txt first if it's available
     # TODO what flags does cmake need?
     if cmakelists:
+        cmakelists = cmakelists.replace(path, '').strip(os.path.sep)
+        print(f'Run cmake: {path}')
         command = ['cmake', cmakelists]
         # return command, 'dummy', 'dummy'
-        result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
         if result.returncode != 0:
             return command, result.stdout, result.stderr
     # run Makefile
+    print(f'Run make: {path}')
     command = ['make', 'V=1']
     # return command, 'dummy', 'dummy'
-    result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(command, cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
     return command, result.stdout, result.stderr
 
 
@@ -39,7 +42,8 @@ def get_relevant_files(root_path: str) -> (list, list, list):
     makefiles = []
     cmakelists = []
     cfiles = []
-
+    
+    print(f'Check subdirectories: {root_path}')
     # TODO stop checking for other types once a higher-priority type is found
     for root, _, files in os.walk(root_path):
         for f in files:
@@ -80,11 +84,12 @@ def find_best_file(file_list: list) -> str:
     return file_list[0][0]
 
 
-def compile_cfiles_directly(cfiles: list) -> (list, str, str):
+def compile_cfiles_directly(repo_path: str, cfiles: list) -> (list, str, str):
     output_file = 'compiled_output'
     command = ['gcc'] + cfiles + ['-o', output_file]
     # return command, 'dummy', 'dummy'
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr = subprocess.PIPE, text=True)
+    print(f'Run gcc: {repo_path}')
+    result = subprocess.run(command, cwd=repo_path, stdout=subprocess.PIPE, stderr = subprocess.PIPE, text=True, timeout=60)
     return command, result.stdout, result.stderr
 
 
@@ -133,7 +138,10 @@ def update_log(repo_path: str, command: list, output: str, error: str):
     log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
     file_exists = os.path.isfile(log_file)
     process = command[0] if command != 'None' else 'None'
-    args = str(command[1:]) if command != 'None' else 'None'
+    args = command[1:] if command != 'None' else 'None'
+    if len(args) > 5:
+        args = f'(...) {args[-5:]}'
+    
     timestamp = datetime.now()
 
     with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
@@ -172,7 +180,7 @@ def process_repo(repo_path: str):
             cmakelists_path = find_best_file(cmakelists)
             result = do_compile(repo_path, cmakelists_path)
         elif cfiles:
-            result = compile_cfiles_directly(cfiles)
+            result = compile_cfiles_directly(repo_path, cfiles)
 
     update_log(repo_path, *result)
 
@@ -181,6 +189,7 @@ def process_repo(repo_path: str):
     diff = compare_dir_structure(before, after)
     move_compiled_files(diff)
     clean_up([before, after])
+    print(f'Done: {repo_path}\n')
 
 
 def main():
