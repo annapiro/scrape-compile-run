@@ -151,11 +151,12 @@ def main():
 
     while DOWNLOAD_COUNT < download_limit:
         start_time = time.time()
-
-        repo = get_random_repo()
-        if is_eligible_repo(repo):
-            download_repo(repo.full_name)
-
+        try:
+            repo = get_random_repo()
+            if is_eligible_repo(repo):
+                download_repo(repo.full_name)
+        except Exception as e:
+            print(e)
         end_time = time.time()
         print(f'{round(end_time - start_time)}s')
 
