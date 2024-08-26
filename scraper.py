@@ -59,7 +59,7 @@ def is_eligible_repo(repo: Repository) -> bool:
         print("Size limit exceeded!")
         return False
     # don't include whatever calls itself a 'library'
-    if 'library' in str(repo.description):
+    if 'library' in str(repo.description.lower()):
         print("May be a library!")
         return False
     # check that it contains at least one .c file
@@ -123,9 +123,11 @@ def download_repo(full_name: str):
     with open(zip_path, 'wb') as f:
         f.write(response.content)
     # open and extract the zip file
-    with zipfile.ZipFile(zip_path, 'r') as f:
-        f.extractall(SAVE_DIR)
-
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as f:
+            f.extractall(SAVE_DIR)
+    finally:
+        os.remove(zip_path)
     DOWNLOAD_COUNT += 1
     print(f'Downloaded {full_name} ({dwnld_type})')
 
@@ -158,10 +160,6 @@ def main():
         print(f'{round(end_time - start_time)}s')
 
         check_rate_limits()
-
-    # clean up zip files
-    for z in [f for f in os.listdir(SAVE_DIR) if f.endswith('zip')]:
-        os.remove(os.path.join(SAVE_DIR, z))
 
 
 if __name__ == "__main__":
