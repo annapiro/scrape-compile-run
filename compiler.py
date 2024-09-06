@@ -4,6 +4,7 @@ import shutil
 import csv
 from dotenv import load_dotenv
 from datetime import datetime
+from tqdm import tqdm
 
 
 load_dotenv()
@@ -38,8 +39,9 @@ def do_compile(path: str, cmakelists: str = None) -> (list, str, str):
 
 def compile_cfiles_directly(repo_path: str, cfiles: list) -> (list, str, str):
     output_file = 'compiled_output'
+    cfiles_relative = [os.path.relpath(f, repo_path) for f in cfiles]
     print(f'Run gcc: {repo_path}')
-    command = ['gcc'] + cfiles + ['-o', output_file]
+    command = ['gcc'] + cfiles_relative + ['-o', output_file]
     _, out, err = do_subprocess_run(command, repo_path)
     return command, out, err
 
@@ -208,7 +210,8 @@ def process_repo(repo_path: str):
 
 def main():
     repos = os.scandir(SOURCE_DIR)
-    for entry in repos:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    for entry in tqdm(repos):
         if entry.is_dir():
             process_repo(entry.path)
 

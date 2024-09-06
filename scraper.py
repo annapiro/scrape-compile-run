@@ -59,9 +59,10 @@ def is_eligible_repo(repo: Repository) -> bool:
         print("Size limit exceeded!")
         return False
     # don't include whatever calls itself a 'library'
-    if 'library' in str(repo.description.lower()):
-        print("May be a library!")
-        return False
+    if repo.description:    
+        if 'library' in str(repo.description.lower()):
+            print("May be a library!")
+            return False
     # check that it contains at least one .c file
     response = requests.get(f'{BASE_ENDPOINT}/search/code',
                             headers=HEADERS,
