@@ -14,52 +14,50 @@ OUT_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
 LOG_DIR = os.path.join(*os.getenv('LOG_DIR').split('/'))
 
 
-def run_cmake_make(path: str, cmakelists: str = None) -> (str, str, str, str):
+def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
     """
     :param path: Directory where Makefile is located or will be generated
     :param cmakelists: Path to CMakeLists.txt if it needs to be run first
-    :return: executed command(s), target file/dir, stdout, stderr
+    :return: executed command(s), list of target files, stdout, stderr
     """
     process_log = []
+    target_log = []
+
     # run CMakeLists.txt first if it's available
     if cmakelists:
         # make CMakeLists.txt path relative to the repo root
-        cmakelists = cmakelists.replace(path, '').strip(os.path.sep)
+        cmakelists_rel = cmakelists.replace(path, '').strip(os.path.sep)
         print(f'Run cmake: {path}')
-        command = ['cmake', cmakelists]
-        process_log.append(command[0])
+        command = ['cmake', cmakelists_rel]
         returncode, out, err = run_subprocess(command, path)
+
+        # logging
+        process_log.append(command[0])
+        target_log.append(cmakelists)
         if returncode != 0:
-            return '-'.join(process_log), cmakelists, out, err
-        else:
-            update_log(repo_path=path,
-                       diff=[],
-                       process='-'.join(process_log),
-                       tar_path=cmakelists,
-                       output=out,
-                       error=err)
+            return '-'.join(process_log), target_log, out, err
+
     # run Makefile
     print(f'Run make: {path}')
     command = ['make', 'V=1']
-    process_log.append(command[0])
     _, out, err = run_subprocess(command, path)
-    return '-'.join(process_log), path, out, err
+
+    # logging
+    process_log.append(command[0])
+    target_log.append(os.path.join(path, "Makefile"))
+    return '-'.join(process_log), target_log, out, err
 
 
-def run_gcc(repo_path: str, cfiles: list) -> (str, str, str, str):
+def run_gcc(repo_path: str, cfiles: list) -> (str, list, str, str):
     """
-    :return: executed command, list of target files (as str), stdout, stderr
+    :return: executed command, list of target files, stdout, stderr
     """
     output_file = 'compiled_output'
     cfiles_relative = [os.path.relpath(f, repo_path) for f in cfiles]
     print(f'Run gcc: {repo_path}')
     command = ['gcc'] + cfiles_relative + ['-o', output_file]
     _, out, err = run_subprocess(command, repo_path)
-    # cfiles can be a very long list, so for logging purposes only return last 10 items
-    return (command[0],
-            f"(...) {cfiles[-10:]}" if len(cfiles) > 10 else str(cfiles),
-            out,
-            err)
+    return command[0], cfiles, out, err
 
 
 def run_subprocess(command: list, cwd: str) -> (int, str, str):
@@ -168,9 +166,21 @@ def clean_up(files_to_rm: list[str]):
         os.remove(f)
 
 
-def update_log(repo_path: str, diff: list, process: str, tar_path: str, output: str, error: str):
+def update_log(repo_path: str, diff: list, process: str, targets: list, output: str, error: str):
     log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
     file_exists = os.path.isfile(log_file)
+
+    # clean diff paths
+    new_files_rel = []
+    for path in diff:
+        new_files_rel.append(os.path.relpath(path, start=repo_path))
+
+    # clean target paths
+    # list of targets can be very long, so only log the last 10 items
+    targets_rel = []
+    for path in targets[-10:]:
+        targets_rel.append(os.path.relpath(path, start=repo_path))
+    targets_str = f"(...) {targets_rel}" if len(targets) > 10 else str(targets_rel)
 
     # clean repo path
     repo_path = repo_path.strip(os.sep)
@@ -178,19 +188,13 @@ def update_log(repo_path: str, diff: list, process: str, tar_path: str, output: 
         repo_path = os.path.relpath(repo_path, start=SOURCE_DIR)
     repo_path = repo_path.split(os.sep)[0]
 
-    # clean diff paths
-    build_repo_path = os.path.join(OUT_DIR, repo_path)
-    new_files_relative = []
-    for path in diff:
-        new_files_relative.append(os.path.relpath(path, start=build_repo_path))
-
     timestamp = datetime.now()
 
     with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         if not file_exists:
             writer.writerow(['Repo', 'Process', 'Target', 'Output', 'Error', 'New files', 'Timestamp'])
-        writer.writerow([os.path.basename(repo_path), process, tar_path, output, error, new_files_relative, timestamp])
+        writer.writerow([os.path.basename(repo_path), process, targets_str, output, error, new_files_rel, timestamp])
 
 
 def process_repo(repo_path: str):
@@ -204,30 +208,30 @@ def process_repo(repo_path: str):
     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
     makefile_path = os.path.join(repo_path, 'Makefile')
 
-    result = [None, None, None, None]
+    result = [None, [], None, None]
 
-    if os.path.isfile(cmakelists_path):
-        result = run_cmake_make(repo_path, cmakelists_path)
-    elif os.path.isfile(makefile_path):
+    if os.path.isfile(makefile_path):
         result = run_cmake_make(repo_path)
+    elif os.path.isfile(cmakelists_path):
+        result = run_cmake_make(repo_path, cmakelists_path)
     else:
         # walk the repo and find the next best option
         makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
 
-        if cmakelists:
-            cmakelists_path = find_best_file(cmakelists)
-            result = run_cmake_make(repo_path, cmakelists_path)
-        elif makefiles:
+        if makefiles:
             makefile_path = find_best_file(makefiles)
             makefile_dir = os.path.dirname(makefile_path)
             result = run_cmake_make(makefile_dir)
+        elif cmakelists:
+            cmakelists_path = find_best_file(cmakelists)
+            result = run_cmake_make(repo_path, cmakelists_path)
         elif cfiles:
             result = run_gcc(repo_path, cfiles)
 
     save_dir_structure(repo_path, after)
     diff = compare_dir_structure(before, after)
 
-    update_log(repo_path=repo_path, diff=diff, *result)
+    update_log(repo_path=repo_path, diff=diff, process=result[0], targets=result[1], output=result[2], error=result[3])
 
     move_compiled_files(diff)
     clean_up([before, after])
