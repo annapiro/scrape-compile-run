@@ -2,7 +2,9 @@ import os
 import pandas as pd
 import json
 import requests
+import time
 from datetime import datetime
+from tqdm import tqdm
 from dotenv import load_dotenv
 from github import Github
 from scraper import is_eligible_repo, check_rate_limits
@@ -127,27 +129,40 @@ if __name__ == "__main__":
     # update the dataframe with repos from the next eligible month
     month = get_month(processed_months)
     page = 1
+    start = time.time()
     while True:
         query_params = {
             'q': f"language:c pushed:{month}",
             'per_page': 100,
             'page': page,
         }
-        response = requests.get(url, headers=HEADERS, params=query_params)
-        response.raise_for_status()
-        results = response.json()
-        for item in results['items']:
+        try:
+            response = requests.get(url, headers=HEADERS, params=query_params)
+            response.raise_for_status()
+            results = response.json()
+        except Exception as e:
+            print(f"Error during GitHub search: {e}")
+            print(f"Query: {query_params}")
+            page += 1
+            continue
+        for item in tqdm(results['items']):
             repo_name = item['full_name']
             if repo_name in df['Repo']:
+                print(f"{repo_name} is a duplicate!")
+                print(f"Query: {query_params}")
                 continue
-            repo = g.get_repo(repo_name)
-            if is_eligible_repo(repo):
-                df.loc[len(df)] = {'Repo': repo_name,
-                                   'Commit': get_latest_release_hash(repo_name),
-                                   'Pushed': month,
-                                   'Size': repo.size,
-                                   'On disk': False,
-                                   }
+            try:
+                repo = g.get_repo(repo_name)
+                if is_eligible_repo(repo, v=False):
+                    df.loc[len(df)] = {'Repo': repo_name,
+                                       'Commit': get_latest_release_hash(repo_name),
+                                       'Pushed': month,
+                                       'Size': repo.size,
+                                       'On disk': False,
+                                       }
+            except Exception as e:
+                print(f"Error processing repo {repo_name}: {e}")
+                continue
             check_rate_limits()
 
         # break the loop if there are no more pages
@@ -155,5 +170,8 @@ if __name__ == "__main__":
             break
         page += 1
 
+    minutes, seconds = divmod(int(time.time() - start), 60)
+    print(f"Finished {month} in {minutes}m{seconds}s")
     processed_months.append(month)
     wrapup(df, processed_months)
+    print("Data files updated.")

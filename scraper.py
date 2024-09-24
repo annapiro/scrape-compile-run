@@ -47,9 +47,12 @@ def get_random_repo(debug: str = None) -> Repository:
         return repo
 
 
-def is_eligible_repo(repo: Repository) -> bool:
+def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
     """
     Checks whether the repository matches eligibility criteria for download
+    :param repo: Repository to be checked
+    :param v: verbosity setting
+    :return: True or False
     """
     def log(reason: str):
         log_file = os.path.join(LOG_DIR, 'filtered_repos.csv')
@@ -64,18 +67,21 @@ def is_eligible_repo(repo: Repository) -> bool:
     # check if this repo has already been downloaded, by chance
     dircheck = os.path.join(SAVE_DIR, repo.full_name.replace('/', '-'))
     if glob.glob(dircheck + '*'):
-        print("Repo already exists!")
+        if v:
+            print("Repo already exists!")
         log("duplicate")
         return False
     # limit by total size
     if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
-        print("Size limit exceeded!")
+        if v:
+            print("Size limit exceeded!")
         log("size")
         return False
     # don't include whatever calls itself a 'library'
     if repo.description:    
         if 'library' in str(repo.description.lower()):
-            print("May be a library!")
+            if v:
+                print("May be a library!")
             log("library")
             return False
     # check that it contains at least one .c file
@@ -83,7 +89,8 @@ def is_eligible_repo(repo: Repository) -> bool:
                             headers=HEADERS,
                             params={'q': f"repo:{repo.full_name} extension:c"})
     if response.json()['total_count'] == 0:
-        print("Contains no .c files!")
+        if v:
+            print("Contains no .c files!")
         log("no c file")
         return False
 
@@ -155,7 +162,7 @@ def check_rate_limits():
     """
     r = requests.get(f'{BASE_ENDPOINT}/rate_limit', headers=HEADERS).json()
     if r['resources']['search']['remaining'] < 2 or r['resources']['code_search']['remaining'] < 2:
-        print("\nWaiting for 60s...")
+        print("Waiting for 60s...\n")
         time.sleep(60)
 
 
