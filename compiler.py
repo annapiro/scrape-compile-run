@@ -26,6 +26,7 @@ def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
     # run CMakeLists.txt first if it's available
     if cmakelists:
         # make CMakeLists.txt path relative to the repo root
+        # TODO this is bad, use relpath
         cmakelists_rel = cmakelists.replace(path, '').strip(os.path.sep)
         print(f'Run cmake: {path}')
         command = ['cmake', cmakelists_rel]
@@ -208,23 +209,24 @@ def process_repo(repo_path: str):
     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
     makefile_path = os.path.join(repo_path, 'Makefile')
 
+    # process, targets, output, error
     result = [None, [], None, None]
 
-    if os.path.isfile(makefile_path):
-        result = run_cmake_make(repo_path)
-    elif os.path.isfile(cmakelists_path):
+    if os.path.isfile(cmakelists_path):
         result = run_cmake_make(repo_path, cmakelists_path)
+    elif os.path.isfile(makefile_path):
+        result = run_cmake_make(repo_path)
     else:
         # walk the repo and find the next best option
         makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
 
-        if makefiles:
+        if cmakelists:
+            cmakelists_path = find_best_file(cmakelists)
+            result = run_cmake_make(repo_path, cmakelists_path)
+        elif makefiles:
             makefile_path = find_best_file(makefiles)
             makefile_dir = os.path.dirname(makefile_path)
             result = run_cmake_make(makefile_dir)
-        elif cmakelists:
-            cmakelists_path = find_best_file(cmakelists)
-            result = run_cmake_make(repo_path, cmakelists_path)
         elif cfiles:
             result = run_gcc(repo_path, cfiles)
 

@@ -4,6 +4,7 @@ import random
 import time
 import zipfile
 import glob
+import csv
 from github import Github, Repository
 from dotenv import load_dotenv
 from datetime import date
@@ -14,6 +15,7 @@ TOKEN = os.getenv('API_KEY')
 HEADERS = {'Authorization': f'token {TOKEN}'}
 BASE_ENDPOINT = 'https://api.github.com'
 SAVE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
+LOG_DIR = os.path.join(*os.getenv('LOG_DIR').split('/'))
 SIZE_LIMIT = float(os.getenv('SIZE_LIMIT'))  # size limit for downloading repos in KB
 DOWNLOAD_COUNT = 0
 
@@ -49,26 +51,40 @@ def is_eligible_repo(repo: Repository) -> bool:
     """
     Checks whether the repository matches eligibility criteria for download
     """
+    def log(reason: str):
+        log_file = os.path.join(LOG_DIR, 'filtered_repos.csv')
+        file_exists = os.path.isfile(log_file)
+
+        with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            if not file_exists:
+                writer.writerow(['Repo', 'Filter'])
+            writer.writerow([repo.full_name, reason])
+
     # check if this repo has already been downloaded, by chance
     dircheck = os.path.join(SAVE_DIR, repo.full_name.replace('/', '-'))
     if glob.glob(dircheck + '*'):
         print("Repo already exists!")
+        log("duplicate")
         return False
     # limit by total size
     if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
         print("Size limit exceeded!")
+        log("size")
         return False
     # don't include whatever calls itself a 'library'
     if repo.description:    
         if 'library' in str(repo.description.lower()):
             print("May be a library!")
+            log("library")
             return False
     # check that it contains at least one .c file
     response = requests.get(f'{BASE_ENDPOINT}/search/code',
                             headers=HEADERS,
-                            params={'q': f'repo:{repo.full_name} extension:c'})
+                            params={'q': f"repo:{repo.full_name} extension:c"})
     if response.json()['total_count'] == 0:
         print("Contains no .c files!")
+        log("no c file")
         return False
 
     return True
@@ -138,10 +154,6 @@ def check_rate_limits():
     Print the number of remaining requests
     """
     r = requests.get(f'{BASE_ENDPOINT}/rate_limit', headers=HEADERS).json()
-    # print(f"\nRate limit status"
-    #       f"\n{r['resources']['core']['remaining']}/{r['resources']['core']['limit']}\tcore"
-    #       f"\n{r['resources']['search']['remaining']}/{r['resources']['search']['limit']}\t\tsearch"
-    #       f"\n{r['resources']['code_search']['remaining']}/{r['resources']['code_search']['limit']}\t\tcode search")
     if r['resources']['search']['remaining'] < 2 or r['resources']['code_search']['remaining'] < 2:
         print("\nWaiting for 60s...")
         time.sleep(60)

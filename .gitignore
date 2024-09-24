@@ -2,3 +2,5 @@
 .venv
 .env
 out
+data
+__pycache__
