@@ -127,17 +127,19 @@ def find_best_file(file_list: list) -> str:
     return file_list[0][0]
 
 
-def save_dir_structure(path: str, fname: str):
+def save_dir_structure(top: str, fname: str, recurse: bool = True):
     """
     List paths of all files and dirs contained in a root directory
     Save the output in a file
     """
-    with open(fname, 'w', encoding='utf-8') as f:
-        for root, dirs, files in os.walk(path):
-            for name in dirs:
+    with open(fname, 'a', encoding='utf-8') as f:
+        for root, dirs, files in os.walk(top):
+            for name in dirs + files:
                 f.write(os.path.join(root, name) + '\n')
-            for name in files:
-                f.write(os.path.join(root, name) + '\n')
+            #for name in files:
+            #    f.write(os.path.join(root, name) + '\n')
+            if not recurse:
+                break
 
 
 def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
@@ -151,10 +153,11 @@ def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
     return list(after - before)
 
 
-def move_compiled_files(compiled_paths: list[str]):
+def move_compiled_files(compiled_paths: list[str], repo_path: str):
     for item_path in compiled_paths:
         if os.path.isfile(item_path):
-            new_path = item_path.replace(SOURCE_DIR, BUILD_DIR, 1)
+            stripped_path = item_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
+            new_path = os.path.join(BUILD_DIR, repo_path, stripped_path)
             os.makedirs(new_path, exist_ok=True)
             shutil.move(item_path, new_path)
             print(f'New: {new_path}')
@@ -200,11 +203,14 @@ def update_log(repo_path: str, diff: list, process: str, targets: list, output: 
 
 
 def process_repo(repo_path: str):
-    before = 'before.txt'
-    after = 'after.txt'
+    tmp_dir = os.path.join('out', 'tmp')
+    os.makedirs(tmp_dir, exist_ok=True)
+    before = os.path.join(tmp_dir, 'before.txt')
+    after = os.path.join(tmp_dir, 'after.txt')
 
     # record initial repository structure
     save_dir_structure(repo_path, before)
+    save_dir_structure(os.getcwd(), before, recurse=False)
 
     # assuming there's Makefile or CMakeLists in root
     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
@@ -232,11 +238,12 @@ def process_repo(repo_path: str):
             result = run_gcc(repo_path, cfiles)
 
     save_dir_structure(repo_path, after)
+    save_dir_structure(os.getcwd(), after, recurse=False)
     diff = compare_dir_structure(before, after)
 
     update_log(repo_path=repo_path, diff=diff, process=result[0], targets=result[1], output=result[2], error=result[3])
 
-    move_compiled_files(diff)
+    move_compiled_files(diff, os.path.basename(repo_path))
     clean_up([before, after])
     print(f'Done: {repo_path}\n')
 
