@@ -1,17 +1,18 @@
-import subprocess
+import csv
+from datetime import datetime
 import os
 import shutil
-import csv
+import subprocess
+
 from dotenv import load_dotenv
-from datetime import datetime
 from tqdm import tqdm
 
 load_dotenv()
 
 # get directory paths and replace path separators with ones used by the system
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
-OUT_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
-LOG_DIR = os.path.join(*os.getenv('LOG_DIR').split('/'))
+BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
+LOG_DIR = os.path.join('out', 'logs')
 
 
 def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
@@ -153,7 +154,7 @@ def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
 def move_compiled_files(compiled_paths: list[str]):
     for item_path in compiled_paths:
         if os.path.isfile(item_path):
-            new_path = item_path.replace(SOURCE_DIR, OUT_DIR, 1)
+            new_path = item_path.replace(SOURCE_DIR, BUILD_DIR, 1)
             os.makedirs(new_path, exist_ok=True)
             shutil.move(item_path, new_path)
             print(f'New: {new_path}')
