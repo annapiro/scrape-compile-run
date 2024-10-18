@@ -17,9 +17,10 @@ def initialize() -> (pd.DataFrame, list[str]):
         data = load_database()
     else:
         col_names = ['Repo', 'Commit', 'Pushed', 'Size', 'Stars', 'Languages', 'C percentage',
-                     'On disk', 'Archived', 'Last compilation',
+                     'Folder', 'On disk', 'Archived', 'Last compilation',
                      'Process', 'stdout', 'stderr', 'Build files', 'Executables']
         data = pd.DataFrame(columns=col_names)
+        data.set_index('Repo', inplace=True)
     if os.path.isfile(MONTHS_FILE):
         months = load_months_tracker()
     else:

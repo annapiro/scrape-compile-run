@@ -26,59 +26,59 @@ HEADERS = {'Authorization': f'token {TOKEN}'}
 DOWNLOAD_COUNT = 0
 
 
-def download_random_repos(limit: int):
-    """
-    Find and download random repos one by one, up to the specified download limit
-    :param limit: how many repos to download
-    """
-    while DOWNLOAD_COUNT < limit:
-        start_time = time.time()
-        try:
-            repo = find_random_repo()
-            if is_eligible_repo(repo):
-                download_repo(repo.full_name)
-        except Exception as e:
-            print(e)
-        end_time = time.time()
-        print(f"{round(end_time - start_time)}s")
-
-
-def find_random_repo(debug: str = None) -> Repository:
-    g = Github(TOKEN)
-
-    if debug:
-        return g.get_repo(debug)
-
-    while True:
-        query_params = {
-            'q': f"language:c pushed:{get_random_date()}",
-            'per_page': 100,
-            'page': random.randint(1, 10)
-        }
-        results = fetch_response(f"{BASE_ENDPOINT}/search/repositories", query_params).json()
-        # get random repo from the selected page
-        repo = g.get_repo(results['items'][random.randint(0, 99)]['full_name'])
-        # output some query stats to the console
-        print(f"\nFound {repo.full_name}")
-        print(f"{query_params['q'].split()[1]}\tpage:{query_params['page']}\tsize:{repo.size/1024:.2f} MB")
-        return repo
-
-
-def get_random_date() -> str:
-    """
-    Return a year and month in a range between January 10 years ago and current year & month
-    Output formatted as string suitable for GitHub search queries
-    """
-    current_year = datetime.date.today().year
-    current_month = datetime.date.today().month
-    # lower boundary: 10 years ago, converted to months
-    range_from = (current_year - 10) * 12
-    # upper boundary: current month
-    range_to = (current_year * 12) + (current_month - 1)
-    rand_month = random.randint(range_from, range_to)
-    y = rand_month // 12
-    m = (rand_month % 12 + 1)
-    return f"{y}-{m:02}"
+# def download_random_repos(limit: int):
+#     """
+#     Find and download random repos one by one, up to the specified download limit
+#     :param limit: how many repos to download
+#     """
+#     while DOWNLOAD_COUNT < limit:
+#         start_time = time.time()
+#         try:
+#             repo = find_random_repo()
+#             if is_eligible_repo(repo):
+#                 download_by_repo_name(repo.full_name)
+#         except Exception as e:
+#             print(e)
+#         end_time = time.time()
+#         print(f"{round(end_time - start_time)}s")
+#
+#
+# def find_random_repo(debug: str = None) -> Repository:
+#     g = Github(TOKEN)
+#
+#     if debug:
+#         return g.get_repo(debug)
+#
+#     while True:
+#         query_params = {
+#             'q': f"language:c pushed:{get_random_date()}",
+#             'per_page': 100,
+#             'page': random.randint(1, 10)
+#         }
+#         results = fetch_response(f"{BASE_ENDPOINT}/search/repositories", query_params).json()
+#         # get random repo from the selected page
+#         repo = g.get_repo(results['items'][random.randint(0, 99)]['full_name'])
+#         # output some query stats to the console
+#         print(f"\nFound {repo.full_name}")
+#         print(f"{query_params['q'].split()[1]}\tpage:{query_params['page']}\tsize:{repo.size/1024:.2f} MB")
+#         return repo
+#
+#
+# def get_random_date() -> str:
+#     """
+#     Return a year and month in a range between January 10 years ago and current year & month
+#     Output formatted as string suitable for GitHub search queries
+#     """
+#     current_year = datetime.date.today().year
+#     current_month = datetime.date.today().month
+#     # lower boundary: 10 years ago, converted to months
+#     range_from = (current_year - 10) * 12
+#     # upper boundary: current month
+#     range_to = (current_year * 12) + (current_month - 1)
+#     rand_month = random.randint(range_from, range_to)
+#     y = rand_month // 12
+#     m = (rand_month % 12 + 1)
+#     return f"{y}-{m:02}"
 
 
 def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
@@ -130,28 +130,25 @@ def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
     return True
 
 
-def download_repo(full_name: str):
-    """
-    TODO rewrite to use commit hash
-    """
+def download_by_repo_name(repo_name: str):
     global DOWNLOAD_COUNT
 
     # get latest release if it's available
-    release = fetch_response(f"{BASE_ENDPOINT}/repos/{full_name}/releases/latest")
+    release = fetch_response(f"{BASE_ENDPOINT}/repos/{repo_name}/releases/latest")
     if release.status_code == 200:
         release_json = release.json()
         dwnld_url = release_json['zipball_url']
         dwnld_type = release_json['tag_name']
     # if there's no release, just get current state of the main branch
     elif release.status_code == 404:
-        dwnld_url = f'{BASE_ENDPOINT}/repos/{full_name}/zipball'
+        dwnld_url = f'{BASE_ENDPOINT}/repos/{repo_name}/zipball'
         dwnld_type = 'main'
     else:
         print(f'Not downloaded, status code {release.status_code}')
         return
 
     response = fetch_response(dwnld_url)
-    zip_path = os.path.join(SAVE_DIR, full_name.replace('/', '-') + '.zip')
+    zip_path = os.path.join(SAVE_DIR, repo_name.replace('/', '-') + '.zip')
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
     with open(zip_path, 'wb') as f:
         f.write(response.content)
@@ -162,7 +159,24 @@ def download_repo(full_name: str):
     finally:
         os.remove(zip_path)
     DOWNLOAD_COUNT += 1
-    print(f'Downloaded {full_name} ({dwnld_type})')
+    print(f'Downloaded {repo_name} ({dwnld_type})')
+
+
+def download_by_commit_hash(repo_name: str, commit: str):
+    global DOWNLOAD_COUNT
+    response = fetch_response(f"{BASE_ENDPOINT}/repos/{repo_name}/zipball/{commit}")
+    zip_path = os.path.join(SAVE_DIR, '-'.join(repo_name.replace('/', '-'), commit) + '.zip')
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    with open(zip_path, 'wb') as f:
+        f.write(response.content)
+    # open and extract the zip file
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as f:
+            f.extractall(SAVE_DIR)
+    finally:
+        os.remove(zip_path)
+    DOWNLOAD_COUNT += 1
+    print(f"Downloaded {repo_name} ({commit})")
 
 
 # def check_rate_limits():
@@ -177,9 +191,6 @@ def download_repo(full_name: str):
 
 def scrape_whole_month(df: pd.DataFrame, month: str):
     g = Github(TOKEN)
-
-    # TODO later download zip based on commit hash:
-    # https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#download-a-repository-archive-tar
 
     page = 1
     start = time.time()
@@ -206,13 +217,15 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
                 repo = g.get_repo(repo_name)
                 if is_eligible_repo(repo):
                     languages = fetch_response(repo.languages_url).json()
+                    commit_hash = get_latest_release_hash(repo_name)
                     df.loc[len(df)] = {'Repo': repo_name,
-                                       'Commit': get_latest_release_hash(repo_name),
+                                       'Commit': commit_hash,
                                        'Pushed': month,
                                        'Size': repo.size,
                                        'Stars': repo.stargazers_count,
                                        'Languages': languages,
                                        'C ratio': get_c_ratio(languages),
+                                       'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
                                        'On disk': False,
                                        'Archived': False,
                                        }
@@ -227,7 +240,6 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
 
     minutes, seconds = divmod(int(time.time() - start), 60)
     print(f"Finished {month} in {minutes}m {seconds}s")
-    return df
 
 
 def get_next_month(months: list[str], from_date: datetime = None) -> str:
@@ -324,6 +336,6 @@ if __name__ == "__main__":
 
     df, months = db_handler.initialize()
     next_month = get_next_month(months)
-    df = scrape_whole_month(df, next_month)
+    scrape_whole_month(df, next_month)
     months.append(next_month)
     db_handler.wrapup(df, months)
