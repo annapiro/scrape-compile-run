@@ -223,10 +223,10 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
                                        'Pushed': month,
                                        'Size': repo.size,
                                        'Stars': repo.stargazers_count,
-                                       'Languages': languages,
-                                       'C ratio': get_c_ratio(languages),
+                                       'Langs': languages,
+                                       'C_ratio': get_c_ratio(languages),
                                        'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
-                                       'On disk': False,
+                                       'On_disk': False,
                                        'Archived': False,
                                        }
             except Exception as e:
