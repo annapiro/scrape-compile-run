@@ -328,6 +328,7 @@ def main():
         df.at[index, 'Err'] = result[3]
         df.at[index, 'New_files'] = ','.join(diff)
         df.at[index, 'Execs'] = ','.join(execs)
+        df.at[index, 'Last_comp'] = datetime.now()
 
         update_log(repo_path=repo_path,
                    diff=diff,
