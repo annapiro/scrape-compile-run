@@ -165,7 +165,7 @@ def download_by_repo_name(repo_name: str):
 def download_by_commit_hash(repo_name: str, commit: str):
     global DOWNLOAD_COUNT
     response = fetch_response(f"{BASE_ENDPOINT}/repos/{repo_name}/zipball/{commit}")
-    zip_path = os.path.join(SAVE_DIR, '-'.join(repo_name.replace('/', '-'), commit) + '.zip')
+    zip_path = os.path.join(SAVE_DIR, '-'.join([repo_name.replace('/', '-'), commit]) + '.zip')
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
     with open(zip_path, 'wb') as f:
         f.write(response.content)
@@ -319,7 +319,7 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
                 delay = default_delay
                 default_delay *= 2
 
-            assert delay < 600, "delay too long"
+            assert delay < 600, "Delay too long"
 
             print(f"Waiting for {delay}s...")
             time.sleep(delay)
