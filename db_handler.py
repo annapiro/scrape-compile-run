@@ -16,8 +16,8 @@ def initialize() -> (pd.DataFrame, list[str]):
     if os.path.isfile(DF_FILE):
         data = load_database()
     else:
-        col_names = ['Repo', 'Commit', 'Pushed', 'Size', 'Stars', 'Langs', 'C_ratio',
-                     'Folder', 'On_disk', 'Archived', 'Last_comp',
+        col_names = ['Repo', 'Commit', 'Pushed', 'Size', 'Stars', 'C_ratio',
+                     'Folder', 'Langs', 'On_disk', 'Archived', 'Last_comp',
                      'Process', 'Out', 'Err', 'New_files', 'Execs']
         data = pd.DataFrame(columns=col_names)
         data.set_index('Repo', inplace=True)
