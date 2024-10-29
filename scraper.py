@@ -22,7 +22,7 @@ LOG_DIR = os.path.join('out', 'logs')
 
 BASE_ENDPOINT = 'https://api.github.com'
 HEADERS = {'Authorization': f'token {TOKEN}'}
-DOWNLOAD_COUNT = 0
+REPO_COUNT = 0
 
 
 def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
@@ -81,7 +81,7 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
     :param commit: Commit hash (optional)
     :return: Name of the folder containing repo files or None if not downloaded
     """
-    global DOWNLOAD_COUNT
+    global REPO_COUNT
     repo_name = repo_name.lower()
 
     if commit:
@@ -99,7 +99,7 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             dwnld_url = f"{BASE_ENDPOINT}/repos/{repo_name}/zipball"
             dwnld_type = 'main'
         else:
-            print(f"\nNot downloaded, status code {release.status_code}")
+            print(f"Not downloaded, status code {release.status_code}")
             return
 
     response = fetch_response(dwnld_url)
@@ -116,12 +116,20 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             f.extractall(SAVE_DIR)
     finally:
         os.remove(zip_path)
-    DOWNLOAD_COUNT += 1
-    print(f"\nDownloaded {repo_name} ({dwnld_type}): {folder_name}")
+    REPO_COUNT += 1
+    print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
     return folder_name
 
 
-def scrape_whole_month(df: pd.DataFrame, month: str):
+def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
+    """
+    Scrapes data about top 1000 repos updated in a specified month
+    :param df: Dataframe where the data should be saved
+    :param month: Month to search for
+    :param repo_limit: (optional) Max amount of repos to scrape - can be used for debug purposes
+    """
+    global REPO_COUNT
+    filtered_count = 0
     g = Github(TOKEN)
 
     page = 1
@@ -144,13 +152,14 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
             repo_name = item['full_name']
             if repo_name.lower() in df.index:
                 print(f"\n{repo_name} is a duplicate!")
+                filtered_count += 1
                 continue
             try:
                 repo = g.get_repo(repo_name)
-                if is_eligible_repo(repo):
+                if is_eligible_repo(repo, v=False):
                     languages = fetch_response(repo.languages_url).json()
                     commit_hash = get_latest_release_hash(repo_name)
-                    new_row = pd.DataFrame({
+                    new_row = {
                         'Commit': commit_hash,
                         'Pushed': month,
                         'Size': repo.size,
@@ -160,20 +169,30 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
                         'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
                         'On_disk': False,
                         'Archived': False,
-                    }, index=[repo_name.lower()])
-
-                    df = pd.concat([df, new_row])
+                    }
+                    df.loc[repo_name.lower()] = new_row
+                else:
+                    filtered_count += 1
+                    continue
             except Exception as e:
                 print(f"\nError processing repo {repo_name}: {e}")
                 continue
+
+            REPO_COUNT += 1
+            # debug
+            if repo_limit and REPO_COUNT >= repo_limit:
+                break
 
         # break the loop if there are no more pages
         if 'Link' not in response.headers or 'rel="next"' not in response.headers['Link']:
             break
         page += 1
+        # debug
+        if repo_limit and REPO_COUNT >= repo_limit:
+            break
 
     minutes, seconds = divmod(int(time.time() - start), 60)
-    print(f"\nFinished {month} in {minutes}m {seconds}s")
+    print(f"\nFinished {month} ({REPO_COUNT} recorded, {filtered_count} filtered) in {minutes}m {seconds}s")
 
 
 def get_next_month(months: list[str], from_date: datetime = None) -> str:
@@ -255,7 +274,7 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 
             assert delay < 600, "Delay too long"
 
-            print(f"\nWaiting for {delay}s...")
+            print(f"\nRetry in {delay}s...")
             time.sleep(delay)
             continue
 
@@ -268,7 +287,6 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 if __name__ == "__main__":
     df, months = db_handler.initialize()
     next_month = get_next_month(months)
-    # scrape_whole_month(df, next_month)
-    scrape_whole_month(df, '2024-03')
+    scrape_whole_month(df, next_month)
     months.append(next_month)
     db_handler.wrapup(df, months)

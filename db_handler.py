@@ -16,11 +16,28 @@ def initialize() -> (pd.DataFrame, list[str]):
     if os.path.isfile(DF_FILE):
         data = load_database()
     else:
-        col_names = ['Repo', 'Commit', 'Pushed', 'Size', 'Stars', 'C_ratio',
-                     'Folder', 'Langs', 'On_disk', 'Archived', 'Last_comp',
-                     'Process', 'Out', 'Err', 'New_files', 'Execs']
-        data = pd.DataFrame(columns=col_names)
+        columns = {
+            'Repo': 'string',
+            'Commit': 'string',
+            'Pushed': 'string',
+            'Size': 'int',
+            'Stars': 'int',
+            'C_ratio': 'float',
+            'Folder': 'string',
+            'On_disk': 'bool',
+            'Langs': 'object',
+            'Archived': 'bool',
+            'Last_comp': 'object',
+            'Process': 'string',
+            'Out': 'string',
+            'Err': 'string',
+            'New_files': 'string',
+            'Execs': 'string'
+        }
+
+        data = pd.DataFrame({col: pd.Series(dtype=dtype) for col, dtype in columns.items()})
         data.set_index('Repo', inplace=True)
+
     if os.path.isfile(MONTHS_FILE):
         months = load_months_tracker()
     else:

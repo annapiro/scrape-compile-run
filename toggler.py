@@ -4,6 +4,7 @@ import shutil
 
 from dotenv import load_dotenv
 import pandas as pd
+from requests.exceptions import HTTPError
 
 import db_handler
 from scraper import download_repo
@@ -22,11 +23,16 @@ def _download_to_disk(row: pd.Series) -> (str, bool):
     folder_path = os.path.join(SOURCE_DIR, row['Folder'])
     if os.path.exists(folder_path):
         shutil.rmtree(folder_path)
-    # after the download is complete, factual folder name may differ from the expected one
-    confirmed_folder_name = download_repo(row.name, row['Commit'])
-    folder_path = os.path.join(SOURCE_DIR, confirmed_folder_name)
+    try:
+        # after the download is complete, factual folder name may differ from the expected one
+        updated_folder_name = download_repo(row.name, row['Commit'])
+        folder_path = os.path.join(SOURCE_DIR, updated_folder_name)
+    except HTTPError as e:
+        print(f"Could not download {row.name}, reason: {e}")
+        # folder name stays the same
+        updated_folder_name = row['Folder']
     # return confirmation that the folder now exists
-    return (confirmed_folder_name,
+    return (updated_folder_name,
             os.path.exists(folder_path) and os.path.isdir(folder_path))
 
 
@@ -67,7 +73,7 @@ def main(command: str, query: str = '', sample_size: int = None):
     elif command == 'remove':
         if query:
             query += ' and '
-        query += ' and On_disk'
+        query += 'On_disk'
 
     # create a subset of the dataframe according to the query
     sub_df = df.query(query, inplace=False) if query else df.copy()
@@ -85,12 +91,20 @@ def main(command: str, query: str = '', sample_size: int = None):
                                    (results['Folder'].notna()) &
                                    (results['Folder'] != '')]
         # update those rows in the original dataframe
-        df.loc[filtered_results.index, ['On_disk', 'Folder']] = filtered_results[['On_disk', 'Folder']]
+        df.loc[filtered_results.index, ['On_disk', 'Folder']] = filtered_results
         print(f"Successfully downloaded {len(filtered_results)} repos.")
     elif command == 'remove':
-        df['On_disk'] = sub_df.apply(_remove_from_disk, axis=1)
+        result = sub_df.apply(_remove_from_disk, axis=1)
+        df.loc[result.index, 'On_disk'] = result
+        print(f"Successfully removed {len(result)} repos.")
     elif command == 'update':
-        df['On_disk'] = sub_df.apply(_update_download_status, axis=1)
+        # store original values for reference
+        original_on_disk = df['On_disk'].copy()
+        result = sub_df.apply(_update_download_status, axis=1)
+        df.loc[result.index, 'On_disk'] = result
+        # count how many rows have a different value
+        updated_count = (original_on_disk != df['On_disk']).sum()
+        print(f"{updated_count} rows updated.")
     else:
         print("Invalid command. Please use 'download', 'remove' or 'update'.")
 
