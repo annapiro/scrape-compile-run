@@ -47,41 +47,42 @@ def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
     dircheck = os.path.join(SAVE_DIR, repo.full_name.replace('/', '-'))
     if glob.glob(dircheck + '*'):
         if v:
-            print("Repo already exists!")
+            print("\nRepo already downloaded!")
         log("duplicate")
         return False
     # limit by total size
     if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
         if v:
-            print("Size limit exceeded!")
+            print("\nSize limit exceeded!")
         log("size")
         return False
     # don't include whatever calls itself a 'library'
     if repo.description:    
         if 'library' in str(repo.description.lower()):
             if v:
-                print("May be a library!")
+                print("\nMay be a library!")
             log("library")
             return False
     # check that it contains at least one .c file
     response = fetch_response(f"{BASE_ENDPOINT}/search/code", params={'q': f"repo:{repo.full_name} extension:c"}).json()
     if response['total_count'] == 0:
         if v:
-            print("Contains no .c files!")
+            print("\nContains no .c files!")
         log("no c file")
         return False
 
     return True
 
 
-def download_repo(repo_name: str, commit: str = None) -> str:
+def download_repo(repo_name: str, commit: str = None) -> str | None:
     """
     Download either latest available release of a repo or a specified commit state
     :param repo_name: Full name of the repo in the format 'owner/repo'
     :param commit: Commit hash (optional)
-    :return: Name of the folder containing repo files
+    :return: Name of the folder containing repo files or None if not downloaded
     """
     global DOWNLOAD_COUNT
+    repo_name = repo_name.lower()
 
     if commit:
         dwnld_url = f"{BASE_ENDPOINT}/repos/{repo_name}/zipball/{commit}"
@@ -98,7 +99,7 @@ def download_repo(repo_name: str, commit: str = None) -> str:
             dwnld_url = f"{BASE_ENDPOINT}/repos/{repo_name}/zipball"
             dwnld_type = 'main'
         else:
-            print(f'Not downloaded, status code {release.status_code}')
+            print(f"\nNot downloaded, status code {release.status_code}")
             return
 
     response = fetch_response(dwnld_url)
@@ -116,7 +117,7 @@ def download_repo(repo_name: str, commit: str = None) -> str:
     finally:
         os.remove(zip_path)
     DOWNLOAD_COUNT += 1
-    print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
+    print(f"\nDownloaded {repo_name} ({dwnld_type}): {folder_name}")
     return folder_name
 
 
@@ -136,32 +137,34 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
             response = fetch_response(f"{BASE_ENDPOINT}/search/repositories", params=query_params)
             results = response.json()
         except Exception as e:
-            print(f"Error during GitHub search: {e}")
+            print(f"\nError during GitHub search: {e}")
             page += 1
             continue
         for item in tqdm(results['items']):
             repo_name = item['full_name']
-            if repo_name in df['Repo']:
-                print(f"{repo_name} is a duplicate!")
+            if repo_name.lower() in df.index:
+                print(f"\n{repo_name} is a duplicate!")
                 continue
             try:
                 repo = g.get_repo(repo_name)
                 if is_eligible_repo(repo):
                     languages = fetch_response(repo.languages_url).json()
                     commit_hash = get_latest_release_hash(repo_name)
-                    df.loc[len(df)] = {'Repo': repo_name,
-                                       'Commit': commit_hash,
-                                       'Pushed': month,
-                                       'Size': repo.size,
-                                       'Stars': repo.stargazers_count,
-                                       'Langs': languages,
-                                       'C_ratio': get_c_ratio(languages),
-                                       'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
-                                       'On_disk': False,
-                                       'Archived': False,
-                                       }
+                    new_row = pd.DataFrame({
+                        'Commit': commit_hash,
+                        'Pushed': month,
+                        'Size': repo.size,
+                        'Stars': repo.stargazers_count,
+                        'Langs': languages,
+                        'C_ratio': get_c_ratio(languages),
+                        'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
+                        'On_disk': False,
+                        'Archived': False,
+                    }, index=[repo_name.lower()])
+
+                    df = pd.concat([df, new_row])
             except Exception as e:
-                print(f"Error processing repo {repo_name}: {e}")
+                print(f"\nError processing repo {repo_name}: {e}")
                 continue
 
         # break the loop if there are no more pages
@@ -170,7 +173,7 @@ def scrape_whole_month(df: pd.DataFrame, month: str):
         page += 1
 
     minutes, seconds = divmod(int(time.time() - start), 60)
-    print(f"Finished {month} in {minutes}m {seconds}s")
+    print(f"\nFinished {month} in {minutes}m {seconds}s")
 
 
 def get_next_month(months: list[str], from_date: datetime = None) -> str:
@@ -199,7 +202,7 @@ def get_c_ratio(languages: dict) -> float:
     return languages.get("C", 0.0) / sum(languages.values())
 
 
-def get_latest_release_hash(repo_name: str) -> str:
+def get_latest_release_hash(repo_name: str) -> str | None:
     # get latest release if it's available
     release = fetch_response(f"{BASE_ENDPOINT}/repos/{repo_name}/releases/latest", raise_for_status=False)
     if release.status_code == 200:
@@ -252,7 +255,7 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 
             assert delay < 600, "Delay too long"
 
-            print(f"Waiting for {delay}s...")
+            print(f"\nWaiting for {delay}s...")
             time.sleep(delay)
             continue
 
@@ -265,6 +268,7 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 if __name__ == "__main__":
     df, months = db_handler.initialize()
     next_month = get_next_month(months)
-    scrape_whole_month(df, next_month)
+    # scrape_whole_month(df, next_month)
+    scrape_whole_month(df, '2024-03')
     months.append(next_month)
     db_handler.wrapup(df, months)

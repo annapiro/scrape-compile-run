@@ -23,7 +23,7 @@ def _download_to_disk(row: pd.Series) -> (str, bool):
     if os.path.exists(folder_path):
         shutil.rmtree(folder_path)
     # after the download is complete, factual folder name may differ from the expected one
-    confirmed_folder_name = download_repo(row['Repo'], row['Commit'])
+    confirmed_folder_name = download_repo(row.name, row['Commit'])
     folder_path = os.path.join(SOURCE_DIR, confirmed_folder_name)
     # return confirmation that the folder now exists
     return (confirmed_folder_name,
@@ -55,6 +55,8 @@ def _update_download_status(row: pd.Series) -> bool:
 
 def main(command: str, query: str = '', sample_size: int = None):
     df, _ = db_handler.initialize()
+    if not query:
+        query = ''
 
     # only download repos that aren't already on disk
     if command == 'download':
@@ -77,7 +79,7 @@ def main(command: str, query: str = '', sample_size: int = None):
 
     if command == 'download':
         results = sub_df.apply(_download_to_disk, axis=1, result_type = 'expand')
-        results.columns = ['On_disk', 'Folder']
+        results.columns = ['Folder', 'On_disk']
         # filter only those rows that had a successful output
         filtered_results = results[(results['On_disk'] == True) &
                                    (results['Folder'].notna()) &
