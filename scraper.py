@@ -48,7 +48,7 @@ def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
     if glob.glob(dircheck + '*'):
         if v:
             print("\nRepo already downloaded!")
-        log("duplicate")
+        # log("duplicate")
         return False
     # limit by total size
     if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
@@ -170,7 +170,7 @@ def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
                         'On_disk': False,
                         'Archived': False,
                     }
-                    df.loc[repo_name.lower()] = new_row
+                    df.loc[repo_name.lower(), list(new_row.keys())] = new_row
                 else:
                     filtered_count += 1
                     continue

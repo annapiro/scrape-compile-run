@@ -89,7 +89,7 @@ def get_relevant_files(root_path: str) -> (list, list, list):
     cmakelists = []
     cfiles = []
     
-    print(f'Walk subdirs: {root_path}')
+    # print(f'Walk subdirs: {root_path}')
     # TODO stop checking for other types once a higher-priority type is found
     for root, _, files in os.walk(root_path):
         for f in files:
@@ -162,7 +162,9 @@ def move_compiled_files(compiled_paths: list[str], repo_path: str):
             new_path = os.path.join(BUILD_DIR, repo_path, stripped_path)
             os.makedirs(new_path, exist_ok=True)
             shutil.move(item_path, new_path)
-            print(f"New: {new_path}")
+            # only report new executables
+            if os.access(new_path, os.X_OK) or new_path.lower().endswith('.exe'):
+                print(f"New: {new_path}")
 
 
 def find_executables(file_paths: list[str]) -> list[str]:
@@ -215,63 +217,10 @@ def update_log(repo_path: str, diff: list, process: str, targets: list, output: 
         writer.writerow([os.path.basename(repo_path), process, targets_str, output, error, new_files_rel, timestamp])
 
 
-# def process_repo(repo_path: str):
-#     tmp_dir = os.path.join('out', 'tmp')
-#     os.makedirs(tmp_dir, exist_ok=True)
-#     before = os.path.join(tmp_dir, 'before.txt')
-#     after = os.path.join(tmp_dir, 'after.txt')
-#
-#     # record initial repository structure
-#     save_dir_structure(repo_path, before)
-#     save_dir_structure(os.getcwd(), before, recurse=False)
-#
-#     # assuming there's Makefile or CMakeLists in root
-#     cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
-#     makefile_path = os.path.join(repo_path, 'Makefile')
-#
-#     # process, targets, output, error
-#     result = [None, [], None, None]
-#
-#     if os.path.isfile(cmakelists_path):
-#         result = run_cmake_make(repo_path, cmakelists_path)
-#     elif os.path.isfile(makefile_path):
-#         result = run_cmake_make(repo_path)
-#     else:
-#         # walk the repo and find the next best option
-#         makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
-#
-#         if cmakelists:
-#             cmakelists_path = find_best_file(cmakelists)
-#             result = run_cmake_make(repo_path, cmakelists_path)
-#         elif makefiles:
-#             makefile_path = find_best_file(makefiles)
-#             makefile_dir = os.path.dirname(makefile_path)
-#             result = run_cmake_make(makefile_dir)
-#         elif cfiles:
-#             result = run_gcc(repo_path, cfiles)
-#
-#     save_dir_structure(repo_path, after)
-#     save_dir_structure(os.getcwd(), after, recurse=False)
-#     diff = compare_dir_structure(before, after)
-#
-#     update_log(repo_path=repo_path, diff=diff, process=result[0], targets=result[1], output=result[2], error=result[3])
-#
-#     move_compiled_files(diff, os.path.basename(repo_path))
-#     clean_up([before, after])
-#     print(f'Done: {repo_path}\n')
-
-
 def main():
     # repos = os.scandir(SOURCE_DIR)
     os.makedirs(LOG_DIR, exist_ok=True)
     df, _ = db_handler.initialize()
-    # for entry in tqdm(repos):
-    #     if entry.is_dir():
-    #         # folder name should be in the database
-    #         if (df['Folder'] == entry).any():
-    #             process_repo(entry.path)
-    #         else:
-    #             print(f"'{entry}' not found in the database")
 
     # only iterate through the repos that are saved to disk
     filtered_df = df[df['On_disk']].copy()
@@ -321,14 +270,15 @@ def main():
         save_dir_structure(repo_path, after)
         save_dir_structure(os.getcwd(), after, recurse=False)
         diff = compare_dir_structure(before, after)
+        new_files = [os.path.relpath(fpath, start=SOURCE_DIR) for fpath in diff]
         execs = find_executables(diff)
 
         df.at[index, 'Process'] = result[0]
         df.at[index, 'Out'] = result[2]
         df.at[index, 'Err'] = result[3]
-        df.at[index, 'New_files'] = ','.join(diff)
-        df.at[index, 'Execs'] = ','.join(execs)
-        df.at[index, 'Last_comp'] = datetime.now()
+        df.at[index, 'New_files'] = '\n'.join(new_files)
+        df.at[index, 'Execs'] = '\n'.join(execs)
+        df.at[index, 'Last_comp'] = datetime.now().replace(microsecond=0)
 
         update_log(repo_path=repo_path,
                    diff=diff,
@@ -339,9 +289,8 @@ def main():
 
         move_compiled_files(diff, os.path.basename(repo_path))
         clean_up([before, after])
+        db_handler.wrapup(df)
         print(f"Done: {repo_path}\n")
-
-    db_handler.wrapup(df)
 
 
 if __name__ == "__main__":

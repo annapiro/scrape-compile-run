@@ -23,16 +23,16 @@ def initialize() -> (pd.DataFrame, list[str]):
             'Size': 'int',
             'Stars': 'int',
             'C_ratio': 'float',
-            'Folder': 'string',
-            'On_disk': 'bool',
             'Langs': 'object',
-            'Archived': 'bool',
-            'Last_comp': 'object',
             'Process': 'string',
             'Out': 'string',
             'Err': 'string',
             'New_files': 'string',
-            'Execs': 'string'
+            'Execs': 'string',
+            'Last_comp': 'object',
+            'Folder': 'string',
+            'On_disk': 'bool',
+            'Archived': 'bool',
         }
 
         data = pd.DataFrame({col: pd.Series(dtype=dtype) for col, dtype in columns.items()})
