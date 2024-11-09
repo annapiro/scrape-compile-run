@@ -4,6 +4,7 @@ import shutil
 from dotenv import load_dotenv
 import pandas as pd
 
+from compiler import is_executable
 import db_handler
 
 load_dotenv()
@@ -32,7 +33,7 @@ def copy_build_files(source: str, target: str):
     for root, _, files in os.walk(source_path):
         for filename in files:
             filepath = os.path.join(root, filename)
-            if os.access(filepath, os.X_OK) or filename.lower().endswith('.exe'):
+            if is_executable(filepath):
                 destination_folder = os.path.join(target, os.path.relpath(root, start=BUILD_DIR))
                 os.makedirs(destination_folder, exist_ok=True)
                 shutil.copy(filepath, destination_folder)
@@ -48,7 +49,7 @@ def folders_to_zip(source: str, target: str, df: pd.DataFrame):
             continue
         zip_path = os.path.join(target, f"{entry.name}.zip")
         shutil.make_archive(zip_path[:-4], 'zip', entry.path)
-        df.at[row_found.index, 'Archived'] = True
+        df.at[row_found.name, 'Archived'] = True
 
 
 def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
@@ -87,8 +88,10 @@ if __name__ == "__main__":
             # clean up the archival directory for this repo if it was already created
             try:
                 shutil.rmtree(os.path.join(arch_dir, entry.name))
+                print("Archive directory cleaned up")
             except FileNotFoundError:
                 pass
+                print("No archive directory was created")
 
     folders_to_zip(arch_dir, zip_dir, df)
     db_handler.wrapup(df)

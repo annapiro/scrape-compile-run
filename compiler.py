@@ -171,11 +171,22 @@ def find_executables(file_paths: list[str]) -> list[str]:
     execs: list[str] = []
     for file_path in file_paths:
         if os.path.isfile(file_path):
-            if os.access(file_path, os.X_OK) or file_path.lower().endswith('.exe'):
+            if is_executable(file_path):
                 # TODO revise
                 stripped_path = file_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
                 execs.append(stripped_path)
     return execs
+
+
+def is_executable(filepath: str) -> bool:
+    _, output, _ = run_subprocess(command=['file', filepath], cwd='.')
+    output = output.strip('\n')
+    # trim the file name from the output
+    file_description = output.split(': ', 1)[1].lower()
+    if 'executable' in file_description:
+        if 'text executable' not in file_description:
+            return True
+    return False
 
 
 def clean_up(files_to_rm: list[str]):
