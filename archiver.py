@@ -52,15 +52,15 @@ def folders_to_zip(source: str, target: str, df: pd.DataFrame):
 
 
 def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
-    row_copy = df.query(f"Folder == '{folder_name}'").copy()
-    if len(row_copy) == 0:
+    matches = df.query(f"Folder == '{folder_name}'").copy()
+    if len(matches) == 0:
         print(f"Folder '{folder_name}' not found in DataFrame")
         return None
-    if len(row_copy) > 1:
+    if len(matches) > 1:
         print(f"Folder '{folder_name}' appears in DataFrame multiple times")
         return None
     # exactly one match found
-    return row_copy.iloc[[0]]
+    return matches.iloc[0]
 
 
 if __name__ == "__main__":
@@ -71,15 +71,24 @@ if __name__ == "__main__":
     repos = [x for x in os.scandir(BUILD_DIR) if x.is_dir()]
     for entry in repos:
         print()
+        print(f"Processing {entry.name}...")
         row_found = match_folder_to_row(entry.name, df)
         if row_found is None:
             continue
         if row_found['Execs'] == '' or pd.isna(row_found['Execs']):
-            print(f"Build '{entry.name}' contains no executables")
+            print("No executables!")
             continue
-        print(f"Archiving {entry.name}...")
-        copy_source_files(entry.name, arch_dir)
-        copy_build_files(entry.name, arch_dir)
+        try:
+            copy_source_files(entry.name, arch_dir)
+            copy_build_files(entry.name, arch_dir)
+        # TODO this happens with symbolic links, need to look into it
+        except FileNotFoundError as e:
+            print(e)
+            # clean up the archival directory for this repo if it was already created
+            try:
+                shutil.rmtree(os.path.join(arch_dir, entry.name))
+            except FileNotFoundError:
+                pass
 
     folders_to_zip(arch_dir, zip_dir, df)
     db_handler.wrapup(df)
