@@ -12,9 +12,9 @@ import db_handler
 load_dotenv()
 
 # get directory paths and replace path separators with ones used by the system
-SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
-BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
-LOG_DIR = os.path.join('out', 'logs')
+SOURCE_DIR = str(os.path.join(*os.getenv('SOURCE_DIR').split('/')))
+BUILD_DIR = str(os.path.join(*os.getenv('COMPILE_DIR').split('/')))
+LOG_DIR = str(os.path.join('out', 'logs'))
 
 
 def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
@@ -29,8 +29,7 @@ def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
     # run CMakeLists.txt first if it's available
     if cmakelists:
         # make CMakeLists.txt path relative to the repo root
-        # TODO this is bad, use relpath
-        cmakelists_rel = cmakelists.replace(path, '').strip(os.path.sep)
+        cmakelists_rel = os.path.relpath(cmakelists, start=path)
         print(f'Run cmake: {path}')
         command = ['cmake', cmakelists_rel]
         returncode, out, err = run_subprocess(command, path)
@@ -136,7 +135,7 @@ def save_dir_structure(top: str, fname: str, recurse: bool = True):
     """
     with open(fname, 'a', encoding='utf-8') as f:
         for root, dirs, files in os.walk(top):
-            for name in dirs + files:
+            for name in files:
                 f.write(os.path.join(root, name) + '\n')
             if not recurse:
                 break
@@ -153,29 +152,41 @@ def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
     return list(after - before)
 
 
-def move_compiled_files(compiled_paths: list[str], repo_path: str):
+def move_compiled_files(compiled_paths: list[str], repo_folder: str):
     for item_path in compiled_paths:
         if os.path.isfile(item_path):
-            # remove source directory prefix or cwd prefix
-            # TODO too crude
-            stripped_path = item_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
-            new_path = os.path.join(BUILD_DIR, repo_path, stripped_path)
-            os.makedirs(new_path, exist_ok=True)
-            shutil.move(item_path, new_path)
+            # file path relative to the repo folder
+            stripped_path = strip_path(item_path, repo_folder)
+            # new folder that the file will be moved to, relative to cwd
+            new_folder = os.path.join(BUILD_DIR, repo_folder, os.path.dirname(stripped_path))
+            os.makedirs(new_folder, exist_ok=True)
+            # path directly to the file, relative to cwd
+            new_file_path = os.path.join(BUILD_DIR, repo_folder, stripped_path)
+            shutil.move(item_path, new_file_path)
             # only report new executables
-            if os.access(new_path, os.X_OK) or new_path.lower().endswith('.exe'):
-                print(f"New: {new_path}")
+            if is_executable(new_file_path):
+                print(f"New: {new_file_path}")
 
 
-def find_executables(file_paths: list[str]) -> list[str]:
-    execs: list[str] = []
-    for file_path in file_paths:
-        if os.path.isfile(file_path):
-            if is_executable(file_path):
-                # TODO revise
-                stripped_path = file_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
-                execs.append(stripped_path)
-    return execs
+def strip_path(file_path: str, repo_folder: str) -> str:
+    """
+    Remove source directory prefix or cwd prefix from a filepath
+    :param file_path: Path to file with a prefix
+    :param repo_folder: Name of the folder where the repo is saved ('owner-repo-123abc')
+    :return: Path to file stripped of the prefix
+    """
+    cwd = os.getcwd()
+    return os.path.relpath(file_path, start=cwd if file_path.startswith(cwd) else os.path.join(SOURCE_DIR, repo_folder))
+
+
+# def find_executables(file_paths: list[str]) -> list[str]:
+#     execs: list[str] = []
+#     for file_path in file_paths:
+#         if os.path.isfile(file_path):
+#             if is_executable(file_path):
+#                 stripped_path = file_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
+#                 execs.append(stripped_path)
+#     return execs
 
 
 def is_executable(filepath: str) -> bool:
@@ -197,35 +208,35 @@ def clean_up(files_to_rm: list[str]):
         os.remove(f)
 
 
-def update_log(repo_path: str, diff: list, process: str, targets: list, output: str, error: str):
-    log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
-    file_exists = os.path.isfile(log_file)
-
-    # clean diff paths
-    new_files_rel = []
-    for path in diff:
-        new_files_rel.append(os.path.relpath(path, start=repo_path))
-
-    # clean target paths
-    # list of targets can be very long, so only log the last 10 items
-    targets_rel = []
-    for path in targets[-10:]:
-        targets_rel.append(os.path.relpath(path, start=repo_path))
-    targets_str = f"(...) {targets_rel}" if len(targets) > 10 else str(targets_rel)
-
-    # clean repo path
-    repo_path = repo_path.strip(os.sep)
-    if SOURCE_DIR in repo_path:
-        repo_path = os.path.relpath(repo_path, start=SOURCE_DIR)
-    repo_path = repo_path.split(os.sep)[0]
-
-    timestamp = datetime.now()
-
-    with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile)
-        if not file_exists:
-            writer.writerow(['Repo', 'Process', 'Target', 'Output', 'Error', 'New files', 'Timestamp'])
-        writer.writerow([os.path.basename(repo_path), process, targets_str, output, error, new_files_rel, timestamp])
+# def update_log(repo_path: str, diff: list, process: str, targets: list, output: str, error: str):
+#     log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
+#     file_exists = os.path.isfile(log_file)
+#
+#     # clean diff paths
+#     new_files_rel = []
+#     for path in diff:
+#         new_files_rel.append(os.path.relpath(path, start=repo_path))
+#
+#     # clean target paths
+#     # list of targets can be very long, so only log the last 10 items
+#     targets_rel = []
+#     for path in targets[-10:]:
+#         targets_rel.append(os.path.relpath(path, start=repo_path))
+#     targets_str = f"(...) {targets_rel}" if len(targets) > 10 else str(targets_rel)
+#
+#     # clean repo path
+#     repo_path = repo_path.strip(os.sep)
+#     if SOURCE_DIR in repo_path:
+#         repo_path = os.path.relpath(repo_path, start=SOURCE_DIR)
+#     repo_path = repo_path.split(os.sep)[0]
+#
+#     timestamp = datetime.now()
+#
+#     with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
+#         writer = csv.writer(csvfile)
+#         if not file_exists:
+#             writer.writerow(['Repo', 'Process', 'Target', 'Output', 'Error', 'New files', 'Timestamp'])
+#         writer.writerow([os.path.basename(repo_path), process, targets_str, output, error, new_files_rel, timestamp])
 
 
 def main():
@@ -237,7 +248,8 @@ def main():
     filtered_df = df[df['On_disk']].copy()
 
     for index, row in tqdm(filtered_df.iterrows()):
-        repo_path = os.path.join(SOURCE_DIR, row['Folder'])
+        repo_folder = row['Folder']
+        repo_path = os.path.join(SOURCE_DIR, repo_folder)
 
         if not os.path.isdir(repo_path):
             print(f"{repo_path} not found on disk")
@@ -280,28 +292,28 @@ def main():
 
         save_dir_structure(repo_path, after)
         save_dir_structure(os.getcwd(), after, recurse=False)
+        # this will contain full paths
         diff = compare_dir_structure(before, after)
-        new_files = [os.path.relpath(fpath, start=SOURCE_DIR) for fpath in diff]
-        execs = find_executables(diff)
 
         df.at[index, 'Process'] = result[0]
         df.at[index, 'Out'] = result[2]
         df.at[index, 'Err'] = result[3]
-        df.at[index, 'New_files'] = '\n'.join(new_files)
-        df.at[index, 'Execs'] = '\n'.join(execs)
+        # only store relative paths (cwd or repo prefix stripped)
+        df.at[index, 'New_files'] = '\n'.join([strip_path(f, repo_folder) for f in diff])
+        df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
         df.at[index, 'Last_comp'] = datetime.now().replace(microsecond=0)
 
-        update_log(repo_path=repo_path,
-                   diff=diff,
-                   process=result[0],
-                   targets=result[1],
-                   output=result[2],
-                   error=result[3])
+        # update_log(repo_path=repo_path,
+        #            diff=diff,
+        #            process=result[0],
+        #            targets=result[1],
+        #            output=result[2],
+        #            error=result[3])
 
-        move_compiled_files(diff, os.path.basename(repo_path))
+        move_compiled_files(diff, repo_folder)
         clean_up([before, after])
         db_handler.wrapup(df)
-        print(f"Done: {repo_path}\n")
+        print(f"Done: {repo_folder}\n")
 
 
 if __name__ == "__main__":
