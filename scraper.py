@@ -186,6 +186,7 @@ def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
         # break the loop if there are no more pages
         if 'Link' not in response.headers or 'rel="next"' not in response.headers['Link']:
             break
+        db_handler.wrapup(df)
         page += 1
         # debug
         if repo_limit and REPO_COUNT >= repo_limit:

@@ -76,6 +76,7 @@ def main(command: str, query: str = '', sample_size: int = None):
         query += 'On_disk'
 
     # create a subset of the dataframe according to the query
+    print(query)
     sub_df = df.query(query, inplace=False) if query else df.copy()
 
     print(f"{len(sub_df.index)} rows matched the condition before sampling")

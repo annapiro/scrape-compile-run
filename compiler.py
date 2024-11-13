@@ -2,6 +2,7 @@ import csv
 from datetime import datetime
 import os
 import shutil
+import signal
 import subprocess
 
 from dotenv import load_dotenv
@@ -12,9 +13,9 @@ import db_handler
 load_dotenv()
 
 # get directory paths and replace path separators with ones used by the system
-SOURCE_DIR = str(os.path.join(*os.getenv('SOURCE_DIR').split('/')))
-BUILD_DIR = str(os.path.join(*os.getenv('COMPILE_DIR').split('/')))
-LOG_DIR = str(os.path.join('out', 'logs'))
+SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
+BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
+LOG_DIR = os.path.join('out', 'logs')
 
 
 def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
@@ -67,17 +68,27 @@ def run_subprocess(command: list, cwd: str) -> (int, str, str):
     """
     :return: subprocess return code, stdout and stderr
     """
-    # return None, 'dummy', 'dummy'  # debug
+    process = subprocess.Popen(command,
+                               cwd=cwd,
+                               start_new_session=True,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE,
+                               text=True)
+
     try:
-        result = subprocess.run(command,
-                                cwd=cwd,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,
-                                timeout=60)
-        return result.returncode, result.stdout, result.stderr
+        stdout, stderr = process.communicate(timeout=60)
+        return process.returncode, stdout, stderr
     except subprocess.TimeoutExpired as e:
-        print('Timeout')
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)  # terminate the whole process group
+        print("Timeout")
+        # attempt to get any output after killing the process
+        try:
+            stdout, stderr = process.communicate(timeout=10)  # get any output after killing
+        except subprocess.TimeoutExpired:
+            stdout, stderr = None, "Timeout"
+        return None, stdout, stderr
+    except Exception as e:
+        print(e)
         return None, None, str(e)
 
 
@@ -196,7 +207,8 @@ def is_executable(filepath: str) -> bool:
     file_description = output.split(': ', 1)[1].lower()
     if 'executable' in file_description:
         if 'text executable' not in file_description:
-            return True
+            if 'CMakeFiles' not in filepath:
+                return True
     return False
 
 
@@ -248,6 +260,7 @@ def main():
     filtered_df = df[df['On_disk']].copy()
 
     for index, row in tqdm(filtered_df.iterrows()):
+        print(" " + index)
         repo_folder = row['Folder']
         repo_path = os.path.join(SOURCE_DIR, repo_folder)
 
