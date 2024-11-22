@@ -3,6 +3,7 @@ import shutil
 
 from dotenv import load_dotenv
 import pandas as pd
+from tqdm import tqdm
 
 from compiler import is_executable
 import db_handler
@@ -70,7 +71,7 @@ if __name__ == "__main__":
     zip_dir = os.path.join('out', 'zip')
 
     repos = [x for x in os.scandir(BUILD_DIR) if x.is_dir()]
-    for entry in repos:
+    for entry in tqdm(repos):
         print()
         print(f"Processing {entry.name}...")
         row_found = match_folder_to_row(entry.name, df)

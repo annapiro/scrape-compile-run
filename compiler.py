@@ -1,4 +1,3 @@
-import csv
 from datetime import datetime
 import os
 import shutil
@@ -18,14 +17,13 @@ BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
 LOG_DIR = os.path.join('out', 'logs')
 
 
-def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
+def run_cmake_make(path: str, cmakelists: str = None) -> (str, str, str):
     """
     :param path: Directory where Makefile is located or will be generated
     :param cmakelists: Path to CMakeLists.txt if it needs to be run first
     :return: executed command(s), list of target files, stdout, stderr
     """
     process_log = []
-    target_log = []
 
     # run CMakeLists.txt first if it's available
     if cmakelists:
@@ -37,9 +35,8 @@ def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
 
         # logging
         process_log.append(command[0])
-        target_log.append(cmakelists)
         if returncode != 0:
-            return '-'.join(process_log), target_log, out, err
+            return '-'.join(process_log), out, err
 
     # run Makefile
     print(f'Run make: {path}')
@@ -48,11 +45,10 @@ def run_cmake_make(path: str, cmakelists: str = None) -> (str, list, str, str):
 
     # logging
     process_log.append(command[0])
-    target_log.append(os.path.join(path, "Makefile"))
-    return '-'.join(process_log), target_log, out, err
+    return '-'.join(process_log), out, err
 
 
-def run_gcc(repo_path: str, cfiles: list) -> (str, list, str, str):
+def run_gcc(repo_path: str, cfiles: list) -> (str, str, str):
     """
     :return: executed command, list of target files, stdout, stderr
     """
@@ -61,7 +57,7 @@ def run_gcc(repo_path: str, cfiles: list) -> (str, list, str, str):
     print(f'Run gcc: {repo_path}')
     command = ['gcc'] + cfiles_relative + ['-o', output_file]
     _, out, err = run_subprocess(command, repo_path)
-    return command[0], cfiles, out, err
+    return command[0], out, err
 
 
 def run_subprocess(command: list, cwd: str) -> (int, str, str):
@@ -76,7 +72,7 @@ def run_subprocess(command: list, cwd: str) -> (int, str, str):
                                text=True)
 
     try:
-        stdout, stderr = process.communicate(timeout=60)
+        stdout, stderr = process.communicate(timeout=180)
         return process.returncode, stdout, stderr
     except subprocess.TimeoutExpired as e:
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)  # terminate the whole process group
@@ -129,7 +125,7 @@ def assign_priority_score(root_path: str, file_path: str) -> (int, int):
             priority = level
             break
 
-    depth = len(os.path.relpath(file_path, root_path).split(os.sep)) - 1
+    depth = abs(len(os.path.relpath(file_path, root_path).split(os.sep)) - 1)
 
     return priority, -depth
 
@@ -190,16 +186,6 @@ def strip_path(file_path: str, repo_folder: str) -> str:
     return os.path.relpath(file_path, start=cwd if file_path.startswith(cwd) else os.path.join(SOURCE_DIR, repo_folder))
 
 
-# def find_executables(file_paths: list[str]) -> list[str]:
-#     execs: list[str] = []
-#     for file_path in file_paths:
-#         if os.path.isfile(file_path):
-#             if is_executable(file_path):
-#                 stripped_path = file_path.replace(SOURCE_DIR + os.path.sep, '', 1).replace(os.getcwd() + os.path.sep, '', 1)
-#                 execs.append(stripped_path)
-#     return execs
-
-
 def is_executable(filepath: str) -> bool:
     _, output, _ = run_subprocess(command=['file', filepath], cwd='.')
     output = output.strip('\n')
@@ -218,37 +204,6 @@ def clean_up(files_to_rm: list[str]):
     """
     for f in files_to_rm:
         os.remove(f)
-
-
-# def update_log(repo_path: str, diff: list, process: str, targets: list, output: str, error: str):
-#     log_file = os.path.join(LOG_DIR, 'compiler_output.csv')
-#     file_exists = os.path.isfile(log_file)
-#
-#     # clean diff paths
-#     new_files_rel = []
-#     for path in diff:
-#         new_files_rel.append(os.path.relpath(path, start=repo_path))
-#
-#     # clean target paths
-#     # list of targets can be very long, so only log the last 10 items
-#     targets_rel = []
-#     for path in targets[-10:]:
-#         targets_rel.append(os.path.relpath(path, start=repo_path))
-#     targets_str = f"(...) {targets_rel}" if len(targets) > 10 else str(targets_rel)
-#
-#     # clean repo path
-#     repo_path = repo_path.strip(os.sep)
-#     if SOURCE_DIR in repo_path:
-#         repo_path = os.path.relpath(repo_path, start=SOURCE_DIR)
-#     repo_path = repo_path.split(os.sep)[0]
-#
-#     timestamp = datetime.now()
-#
-#     with open(log_file, 'a', newline='', encoding='utf-8') as csvfile:
-#         writer = csv.writer(csvfile)
-#         if not file_exists:
-#             writer.writerow(['Repo', 'Process', 'Target', 'Output', 'Error', 'New files', 'Timestamp'])
-#         writer.writerow([os.path.basename(repo_path), process, targets_str, output, error, new_files_rel, timestamp])
 
 
 def main():
@@ -279,8 +234,8 @@ def main():
         # record cwd structure because sometimes files end up there
         save_dir_structure(os.getcwd(), before, recurse=False)
 
-        # process, targets, output, error
-        result: list[str | list | None] = [None, [], None, None]
+        # process, output, error
+        result: list[str | None] = [None, None, None]
 
         # assuming there's Makefile or CMakeLists in root
         cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
@@ -309,19 +264,12 @@ def main():
         diff = compare_dir_structure(before, after)
 
         df.at[index, 'Process'] = result[0]
-        df.at[index, 'Out'] = result[2]
-        df.at[index, 'Err'] = result[3]
+        df.at[index, 'Out'] = result[1]
+        df.at[index, 'Err'] = result[2]
         # only store relative paths (cwd or repo prefix stripped)
         df.at[index, 'New_files'] = '\n'.join([strip_path(f, repo_folder) for f in diff])
         df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
         df.at[index, 'Last_comp'] = datetime.now().replace(microsecond=0)
-
-        # update_log(repo_path=repo_path,
-        #            diff=diff,
-        #            process=result[0],
-        #            targets=result[1],
-        #            output=result[2],
-        #            error=result[3])
 
         move_compiled_files(diff, repo_folder)
         clean_up([before, after])
