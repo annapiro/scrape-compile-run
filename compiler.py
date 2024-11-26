@@ -17,44 +17,69 @@ BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
 LOG_DIR = os.path.join('out', 'logs')
 
 
-def run_cmake_make(path: str, cmakelists: str = None) -> (str, str, str):
+def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     """
-    :param path: Directory where Makefile is located or will be generated
-    :param cmakelists: Path to CMakeLists.txt if it needs to be run first
+    :param cmake_path: Directory where CMakeLists is located (full path, relative to cwd)
+    :param repo_path: Root directory of the repository (full path)
     :return: executed command(s), list of target files, stdout, stderr
     """
-    process_log = []
+    out_log = ''
+    err_log = ''
 
-    # run CMakeLists.txt first if it's available
-    if cmakelists:
-        # make CMakeLists.txt path relative to the repo root
-        cmakelists_rel = os.path.relpath(cmakelists, start=path)
-        print(f'Run cmake: {path}')
-        command = ['cmake', cmakelists_rel]
-        returncode, out, err = run_subprocess(command, path)
+    # create build folder if it doesn't exist
+    build_rel = 'build'  # relative to the repo root
+    build_path = os.path.join(repo_path, build_rel)
+    os.makedirs(build_path, exist_ok=True)
 
-        # logging
-        process_log.append(command[0])
-        if returncode != 0:
-            return '-'.join(process_log), out, err
+    # make the source path relative to the repo root
+    source_rel = os.path.relpath(cmake_path, start=repo_path)
 
-    # run Makefile
-    print(f'Run make: {path}')
-    command = ['make', 'V=1']
-    _, out, err = run_subprocess(command, path)
+    print(f"Run cmake: {cmake_path}")
+    command = ['cmake', '-S', source_rel, '-B', build_rel]
+    returncode, out, err = run_subprocess(command, repo_path)
 
     # logging
-    process_log.append(command[0])
-    return '-'.join(process_log), out, err
+    process_log = 'cmake'
+    out_log += out
+    err_log += err
+
+    # TODO does it make sense to continue if return code is not 0? (generates additional string junk)
+
+    # build
+    print(f"Run cmake --build: {repo_path}")
+    command = ['cmake', '--build', build_rel]
+    _, out, err = run_subprocess(command, repo_path)
+
+    # logging
+    process_log = 'cmake --build'
+    out_log += '\n\n'
+    out_log += out
+    err_log += '\n\n'
+    err_log += err
+
+    return process_log, out_log, err_log
+
+
+def run_make(make_path: str) -> (str, str, str):
+    """
+    :param make_path: Directory where Makefile is located or will be generated (full path, relative to cwd)
+    :return: executed command(s), list of target files, stdout, stderr
+    """
+    print(f"Run make: {make_path}")
+    command = ['make', 'V=1']
+    _, out, err = run_subprocess(command, make_path)
+    return command[0], out, err
 
 
 def run_gcc(repo_path: str, cfiles: list) -> (str, str, str):
     """
+    :param repo_path: Path to the repository root
+    :param cfiles: List of paths to all .c files in the repo
     :return: executed command, list of target files, stdout, stderr
     """
     output_file = 'compiled_output'
     cfiles_relative = [os.path.relpath(f, repo_path) for f in cfiles]
-    print(f'Run gcc: {repo_path}')
+    print(f"Run gcc: {repo_path}")
     command = ['gcc'] + cfiles_relative + ['-o', output_file]
     _, out, err = run_subprocess(command, repo_path)
     return command[0], out, err
@@ -216,8 +241,8 @@ def main():
 
     for index, row in tqdm(filtered_df.iterrows()):
         print(" " + index)
-        repo_folder = row['Folder']
-        repo_path = os.path.join(SOURCE_DIR, repo_folder)
+        repo_folder = row['Folder']  # only root directory
+        repo_path = os.path.join(SOURCE_DIR, repo_folder)  # full path
 
         if not os.path.isdir(repo_path):
             print(f"{repo_path} not found on disk")
@@ -242,19 +267,19 @@ def main():
         makefile_path = os.path.join(repo_path, 'Makefile')
 
         if os.path.isfile(cmakelists_path):
-            result = run_cmake_make(repo_path, cmakelists_path)
+            result = run_cmake(cmakelists_path, repo_path)
         elif os.path.isfile(makefile_path):
-            result = run_cmake_make(repo_path)
+            result = run_make(repo_path)
         else:
             # walk the repo and find the next best option
             makefiles, cmakelists, cfiles = get_relevant_files(repo_path)
             if cmakelists:
                 cmakelists_path = find_best_file(cmakelists)
-                result = run_cmake_make(repo_path, cmakelists_path)
+                result = run_cmake(cmakelists_path, repo_path)
             elif makefiles:
                 makefile_path = find_best_file(makefiles)
                 makefile_dir = os.path.dirname(makefile_path)
-                result = run_cmake_make(makefile_dir)
+                result = run_make(makefile_dir)
             elif cfiles:
                 result = run_gcc(repo_path, cfiles)
 
