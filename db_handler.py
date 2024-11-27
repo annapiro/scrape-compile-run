@@ -29,7 +29,7 @@ def initialize() -> (pd.DataFrame, list[str]):
             'Err': 'string',
             'New_files': 'string',
             'Execs': 'string',
-            'Last_comp': 'object',
+            'Last_comp': 'string',
             'Folder': 'string',
             'On_disk': 'bool',
             'Archived': 'bool',

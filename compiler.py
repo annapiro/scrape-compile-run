@@ -19,8 +19,8 @@ LOG_DIR = os.path.join('out', 'logs')
 
 def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     """
-    :param cmake_path: Directory where CMakeLists is located (full path, relative to cwd)
-    :param repo_path: Root directory of the repository (full path)
+    :param cmake_path: Path to the CMakeLists.txt file (relative to cwd)
+    :param repo_path: Root directory of the repository (full path, relative to cwd)
     :return: executed command(s), list of target files, stdout, stderr
     """
     out_log = ''
@@ -31,10 +31,13 @@ def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     build_path = os.path.join(repo_path, build_rel)
     os.makedirs(build_path, exist_ok=True)
 
-    # make the source path relative to the repo root
-    source_rel = os.path.relpath(cmake_path, start=repo_path)
+    # remove file name from the CMakeLists path
+    cmake_dir = os.path.dirname(cmake_path)
 
-    print(f"Run cmake: {cmake_path}")
+    # make the source path relative to the repo root
+    source_rel = os.path.relpath(cmake_dir, start=repo_path)
+
+    print(f"Run cmake: {cmake_dir}")
     command = ['cmake', '-S', source_rel, '-B', build_rel]
     returncode, out, err = run_subprocess(command, repo_path)
 
@@ -46,15 +49,16 @@ def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     # TODO does it make sense to continue if return code is not 0? (generates additional string junk)
 
     # build
-    print(f"Run cmake --build: {repo_path}")
     command = ['cmake', '--build', build_rel]
     _, out, err = run_subprocess(command, repo_path)
 
     # logging
     process_log = 'cmake --build'
-    out_log += '\n\n'
+    if out_log:
+        out_log += '\n\n'
     out_log += out
-    err_log += '\n\n'
+    if err_log:
+        err_log += '\n\n'
     err_log += err
 
     return process_log, out_log, err_log
@@ -289,12 +293,12 @@ def main():
         diff = compare_dir_structure(before, after)
 
         df.at[index, 'Process'] = result[0]
-        df.at[index, 'Out'] = result[1]
-        df.at[index, 'Err'] = result[2]
+        df.at[index, 'Out'] = result[1].strip('\n ')
+        df.at[index, 'Err'] = result[2].strip('\n ')
         # only store relative paths (cwd or repo prefix stripped)
         df.at[index, 'New_files'] = '\n'.join([strip_path(f, repo_folder) for f in diff])
         df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
-        df.at[index, 'Last_comp'] = datetime.now().replace(microsecond=0)
+        df.at[index, 'Last_comp'] = str(datetime.now().replace(microsecond=0))
 
         move_compiled_files(diff, repo_folder)
         clean_up([before, after])
