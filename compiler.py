@@ -264,7 +264,7 @@ def main():
         save_dir_structure(os.getcwd(), before, recurse=False)
 
         # process, output, error
-        result: list[str | None] = [None, None, None]
+        result: list[str] = ['', '', '']
 
         # assuming there's Makefile or CMakeLists in root
         cmakelists_path = os.path.join(repo_path, 'CMakeLists.txt')
@@ -292,9 +292,9 @@ def main():
         # this will contain full paths
         diff = compare_dir_structure(before, after)
 
-        df.at[index, 'Process'] = result[0]
-        df.at[index, 'Out'] = result[1].strip('\n ')
-        df.at[index, 'Err'] = result[2].strip('\n ')
+        df.at[index, 'Process'] = result[0] if result[0] else ''
+        df.at[index, 'Out'] = result[1].strip('\n ') if result[1] else ''
+        df.at[index, 'Err'] = result[2].strip('\n ') if result[2] else ''
         # only store relative paths (cwd or repo prefix stripped)
         df.at[index, 'New_files'] = '\n'.join([strip_path(f, repo_folder) for f in diff])
         df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])

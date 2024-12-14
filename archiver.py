@@ -80,6 +80,9 @@ if __name__ == "__main__":
         if row_found['Execs'] == '' or pd.isna(row_found['Execs']):
             print("No executables!")
             continue
+        if not row_found['On_disk']:
+            print("Source files not on disk!")
+            continue
         try:
             copy_source_files(entry.name, arch_dir)
             copy_build_files(entry.name, arch_dir)

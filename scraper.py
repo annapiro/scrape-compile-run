@@ -1,5 +1,6 @@
 import csv
 import datetime
+import gc
 import glob
 import os
 import time
@@ -100,6 +101,7 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             dwnld_type = 'main'
         else:
             print(f"Not downloaded, status code {release.status_code}")
+            gc.collect()
             return
 
     response = fetch_response(dwnld_url)
@@ -118,6 +120,7 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
         os.remove(zip_path)
     REPO_COUNT += 1
     print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
+    gc.collect()
     return folder_name
 
 
