@@ -162,18 +162,32 @@ def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
                 if is_eligible_repo(repo, v=False):
                     languages = fetch_response(repo.languages_url).json()
                     commit_hash = get_latest_release_hash(repo_name)
-                    new_row = {
+                    new_row = pd.DataFrame([{
+                        'Repo': repo_name.lower(),
                         'Commit': commit_hash,
                         'Pushed': month,
                         'Size': repo.size,
                         'Stars': repo.stargazers_count,
-                        'Langs': languages,
                         'C_ratio': get_c_ratio(languages),
+                        'Langs': languages,
                         'Folder': '-'.join([repo_name.replace('/', '-'), commit_hash]),
                         'On_disk': False,
                         'Archived': False,
-                    }
-                    df.loc[repo_name.lower(), list(new_row.keys())] = new_row
+                    }])
+                    new_row = new_row.astype({
+                        'Repo': 'string',
+                        'Commit': 'string',
+                        'Pushed': 'string',
+                        'Size': 'int32',
+                        'Stars': 'int32',
+                        'C_ratio': 'float32',
+                        'Langs': 'object',
+                        'Folder': 'string',
+                        'On_disk': 'bool',
+                        'Archived': 'bool',
+                    })
+                    new_row.set_index('Repo', inplace=True)
+                    df = pd.concat([df, new_row], axis=0)
                 else:
                     filtered_count += 1
                     continue
