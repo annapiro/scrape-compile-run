@@ -29,6 +29,12 @@ def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     # create build folder if it doesn't exist
     build_rel = 'build'  # relative to the repo root
     build_path = os.path.join(repo_path, build_rel)
+    # make sure there's no file with this name
+    suffix = 0
+    while os.path.isfile(build_path):
+        build_rel += str(suffix)
+        build_path = os.path.join(repo_path, build_rel)
+        suffix += 1
     os.makedirs(build_path, exist_ok=True)
 
     # remove file name from the CMakeLists path
@@ -253,7 +259,8 @@ def main():
             df.at[index, 'On_disk'] = False
             continue
 
-        tmp_dir = os.path.join('out', 'tmp')
+        # path for temporary files
+        tmp_dir = 'out'
         os.makedirs(tmp_dir, exist_ok=True)
         before = os.path.join(tmp_dir, 'before.txt')
         after = os.path.join(tmp_dir, 'after.txt')
