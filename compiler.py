@@ -1,3 +1,4 @@
+import csv
 from datetime import datetime
 import os
 import shutil
@@ -241,6 +242,18 @@ def clean_up(files_to_rm: list[str]):
         os.remove(f)
 
 
+def log_output(repo: str, last_comp: str, process: str, out: str, err: str, new_files: str, execs: str):
+    log_path = os.path.join(LOG_DIR, 'compiler_log.csv')
+    new_log = not os.path.isfile(log_path)
+
+    with open(log_path, mode='a', newline='') as f:
+        writer = csv.writer(f)
+        # create header if the file is new
+        if new_log:
+            writer.writerow(['Repo', 'Last_comp', 'Process', 'Out', 'Err', 'New_files', 'Execs'])
+        writer.writerow([repo, last_comp, process, out, err, new_files, execs])
+
+
 def main():
     # repos = os.scandir(SOURCE_DIR)
     os.makedirs(LOG_DIR, exist_ok=True)
@@ -299,11 +312,20 @@ def main():
         # this will contain full paths
         diff = compare_dir_structure(before, after)
 
-        df.at[index, 'Process'] = result[0] if result[0] else ''
-        df.at[index, 'Out'] = result[1].strip('\n ') if result[1] else ''
-        df.at[index, 'Err'] = result[2].strip('\n ') if result[2] else ''
+        # format the output data/logs
+        last_comp = str(datetime.now().replace(microsecond=0))
+        process = result[0] if result[0] else ''
+        out = result[1].strip('\n ') if result[1] else ''
+        err = result[2].strip('\n ') if result[2] else ''
         # only store relative paths (cwd or repo prefix stripped)
-        df.at[index, 'New_files'] = '\n'.join([strip_path(f, repo_folder) for f in diff])
+        new_files = '\n'.join([strip_path(f, repo_folder) for f in diff])
+        execs = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
+
+        # log to csv
+        log_output(index, last_comp, process, out, err, new_files, execs)
+
+        # update the database
+        df.at[index, 'Process'] = process
         df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
         df.at[index, 'Last_comp'] = str(datetime.now().replace(microsecond=0))
 
