@@ -84,10 +84,11 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
     """
     global REPO_COUNT
     repo_name = repo_name.lower()
-
+    print(f"Dwnld attempt: {repo_name}")
     if commit:
         dwnld_url = f"{BASE_ENDPOINT}/repos/{repo_name}/zipball/{commit}"
         dwnld_type = commit
+        print('Set commit')
     else:
         # get latest release if it's available
         release = fetch_response(f"{BASE_ENDPOINT}/repos/{repo_name}/releases/latest")
@@ -95,18 +96,22 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             release_json = release.json()
             dwnld_url = release_json['zipball_url']
             dwnld_type = release_json['tag_name']
+            print('Set release')
         # if there's no release, just get current state of the main branch
         elif release.status_code == 404:
             dwnld_url = f"{BASE_ENDPOINT}/repos/{repo_name}/zipball"
             dwnld_type = 'main'
+            print('Set main branch')
         else:
             print(f"Not downloaded, status code {release.status_code}")
             gc.collect()
             return
 
+    print('Fetching response from download url...')
     response = fetch_response(dwnld_url)
     zip_path = os.path.join(SAVE_DIR, repo_name.replace('/', '-') + '.zip')
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    print('Writing zip file...')
     with open(zip_path, 'wb') as f:
         f.write(response.content)
     try:
@@ -115,11 +120,13 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             # it should be the prefix of the first item on the list
             folder_name = f.namelist()[0].split('/')[0]
             # extract the zip file
+            print('Extracting zip...')
             f.extractall(SAVE_DIR)
     finally:
         os.remove(zip_path)
     REPO_COUNT += 1
-    print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
+    print('Done!')
+    # print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
     gc.collect()
     return folder_name
 
@@ -303,8 +310,9 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 
 
 if __name__ == "__main__":
-    df, months = db_handler.initialize()
-    next_month = get_next_month(months)
-    scrape_whole_month(df, next_month)
-    months.append(next_month)
-    db_handler.wrapup(df, months)
+    while True:
+        df, months = db_handler.initialize()
+        next_month = get_next_month(months)
+        scrape_whole_month(df, next_month)
+        months.append(next_month)
+        db_handler.wrapup(df, months)
