@@ -59,7 +59,7 @@ def _update_download_status(row: pd.Series) -> bool:
     return os.path.exists(folder_path) and os.path.isdir(folder_path)
 
 
-def main(command: str, query: str = '', sample_size: int = None):
+def execute_command(command: str, query: str = '', sample_size: int = None):
     df, _ = db_handler.initialize()
     if not query:
         query = ''
@@ -120,4 +120,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(args.command, args.q, args.size)
+    execute_command(args.command, args.q, args.size)

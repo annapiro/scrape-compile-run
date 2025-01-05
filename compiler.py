@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 
 import db_handler
+from toggler import execute_command
 
 load_dotenv()
 
@@ -258,6 +259,9 @@ def main():
     # repos = os.scandir(SOURCE_DIR)
     os.makedirs(LOG_DIR, exist_ok=True)
     df, _ = db_handler.initialize()
+
+    # update on disk status of source repos before doing anything
+    execute_command('update')
 
     # only iterate through the repos that are saved to disk
     filtered_df = df[df['On_disk']].copy()

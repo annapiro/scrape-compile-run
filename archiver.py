@@ -97,5 +97,6 @@ if __name__ == "__main__":
                 pass
                 print("No archive directory was created")
 
+    # TODO fails when there are no execs because out/archive doesn't exist
     folders_to_zip(arch_dir, zip_dir, df)
     db_handler.wrapup(df)
