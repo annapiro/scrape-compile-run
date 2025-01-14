@@ -312,6 +312,6 @@ if __name__ == "__main__":
     while True:
         df, months = db_handler.initialize()
         next_month = get_next_month(months)
-        df = scrape_whole_month(df, next_month, repo_limit=2)
+        df = scrape_whole_month(df, next_month)
         months.append(next_month)
         db_handler.wrapup(df, months)

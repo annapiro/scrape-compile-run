@@ -15,7 +15,7 @@ trap wrapup SIGTERM
 
 while true; do
     printf "\n*** Download ***\n\n"
-    python3 scripts/toggler.py download --q "Last_comp.isna()" --size 15
+    python3 scripts/toggler.py download --q "Last_comp.isna()" --size 100
     printf "\n*** Compile ***\n\n"
     python3 scripts/compiler.py
     printf "\n*** Archive ***\n\n"

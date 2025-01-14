@@ -120,6 +120,9 @@ def main():
     arch_dir = os.path.join('out', 'archive')
     zip_dir = os.path.join('out', 'zip')
 
+    os.makedirs(arch_dir, exist_ok=True)
+    os.makedirs(zip_dir, exist_ok=True)
+
     repos = [x for x in os.scandir(BUILD_DIR) if x.is_dir()]
     for entry in tqdm(repos):
         print()
