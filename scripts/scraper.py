@@ -23,7 +23,6 @@ LOG_DIR = os.path.join('out', 'logs')
 
 BASE_ENDPOINT = 'https://api.github.com'
 HEADERS = {'Authorization': f'token {TOKEN}'}
-REPO_COUNT = 0
 
 
 def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
@@ -82,7 +81,6 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
     :param commit: Commit hash (optional)
     :return: Name of the folder containing repo files or None if not downloaded
     """
-    global REPO_COUNT
     repo_name = repo_name.lower()
     print(f"Downloading {repo_name}")
     if commit:
@@ -121,20 +119,20 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             f.extractall(SAVE_DIR)
     finally:
         os.remove(zip_path)
-    REPO_COUNT += 1
     print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
     gc.collect()
     return folder_name
 
 
-def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
+def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None) -> pd.DataFrame:
     """
     Scrapes data about top 1000 repos updated in a specified month
     :param df: Dataframe where the data should be saved
     :param month: Month to search for
     :param repo_limit: (optional) Max amount of repos to scrape - can be used for debug purposes
+    :return Updated dataframe
     """
-    global REPO_COUNT
+    repo_count = 0
     filtered_count = 0
     g = Github(TOKEN)
 
@@ -198,22 +196,26 @@ def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None):
                 print(f"\nError processing repo {repo_name}: {e}")
                 continue
 
-            REPO_COUNT += 1
+            repo_count += 1
             # debug
-            if repo_limit and REPO_COUNT >= repo_limit:
+            if repo_limit and repo_count >= repo_limit:
                 break
 
         # break the loop if there are no more pages
         if 'Link' not in response.headers or 'rel="next"' not in response.headers['Link']:
             break
-        db_handler.wrapup(df)
+
+        # save the dataframe to file after every page to avoid losing progress if the script breaks
+        db_handler.wrapup(data=df)
         page += 1
+
         # debug
-        if repo_limit and REPO_COUNT >= repo_limit:
+        if repo_limit and repo_count >= repo_limit:
             break
 
     minutes, seconds = divmod(int(time.time() - start), 60)
-    print(f"\nFinished {month} ({REPO_COUNT} recorded, {filtered_count} filtered) in {minutes}m {seconds}s")
+    print(f"\nFinished {month} ({repo_count} recorded, {filtered_count} filtered) in {minutes}m {seconds}s")
+    return df
 
 
 def get_next_month(months: list[str], from_date: datetime = None) -> str:
@@ -310,6 +312,6 @@ if __name__ == "__main__":
     while True:
         df, months = db_handler.initialize()
         next_month = get_next_month(months)
-        scrape_whole_month(df, next_month)
+        df = scrape_whole_month(df, next_month, repo_limit=2)
         months.append(next_month)
         db_handler.wrapup(df, months)

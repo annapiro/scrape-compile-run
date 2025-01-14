@@ -109,7 +109,7 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
     else:
         print("Invalid command. Please use 'download', 'remove' or 'update'.")
 
-    db_handler.wrapup(df)
+    db_handler.wrapup(data=df)
 
 
 if __name__ == "__main__":

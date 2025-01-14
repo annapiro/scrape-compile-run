@@ -129,7 +129,7 @@ def main():
 
     # TODO fails when there are no execs because out/archive doesn't exist
     folders_to_zip(arch_dir, zip_dir, df)
-    db_handler.wrapup(df)
+    db_handler.wrapup(data=df)
 
 
 if __name__ == "__main__":

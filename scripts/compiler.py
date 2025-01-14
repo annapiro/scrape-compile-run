@@ -337,7 +337,7 @@ def main():
 
         move_compiled_files(diff, repo_folder)
         clean_up([before, after])
-        db_handler.wrapup(df)
+        db_handler.wrapup(data=df)
         print(f"Done: {repo_folder}\n")
 
 
