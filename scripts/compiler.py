@@ -261,7 +261,9 @@ def main():
     df, _ = db_handler.initialize()
 
     # update on disk status of source repos before doing anything
+    print("Check repos on disk:")
     execute_command('update')
+    print()
 
     # only iterate through the repos that are saved to disk
     filtered_df = df[df['On_disk']].copy()

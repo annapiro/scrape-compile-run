@@ -43,6 +43,12 @@ def copy_build_files(source: str, target: str):
 
 
 def folders_to_zip(source: str, target: str, df: pd.DataFrame):
+    """
+    Compress each folder in a directory to a zip archive and updated the 'Archived' flag in the dataframe
+    :param source: Directory containing folders to be zipped
+    :param target: Directory to save zip files
+    :param df: Dataframe
+    """
     archives = [x for x in os.scandir(source) if x.is_dir()]
     for entry in archives:
         row_found = match_folder_to_row(entry.name, df)
@@ -54,6 +60,12 @@ def folders_to_zip(source: str, target: str, df: pd.DataFrame):
 
 
 def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
+    """
+    Find row in the dataframe that corresponds to the given source folder
+    :param folder_name: Folder to find in the dataframe
+    :param df: Dataframe
+    :return: pandas Series if found, otherwise None
+    """
     matches = df.query(f"Folder == '{folder_name}'").copy()
     if len(matches) == 0:
         print(f"Folder '{folder_name}' not found in DataFrame")
@@ -65,7 +77,45 @@ def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
     return matches.iloc[0]
 
 
-if __name__ == "__main__":
+def is_archivable(repo_dir_name: str, df: pd.DataFrame) -> bool:
+    """
+    Check if the repo fulfills the requirements to be archived:
+    - Can be matched to the repo database
+    - Compilation output has produced executable files
+    - Source repo is currently on disk
+    :param repo_dir_name: Name of the directory where the repo source (or build) is stored
+    :param df: Dataframe with all repo data
+    :return: True or False
+    """
+    row_found = match_folder_to_row(repo_dir_name, df)
+    if row_found is None:
+        return False
+    if row_found['Execs'] == '' or pd.isna(row_found['Execs']):
+        print("No executables!")
+        return False
+    if not row_found['On_disk']:
+        print("Source files not on disk!")
+        return False
+    return True
+
+
+def process_repo(repo_dir: os.DirEntry, arch_dir: str):
+    try:
+        copy_source_files(repo_dir.name, arch_dir)
+        copy_build_files(repo_dir.name, arch_dir)
+    # TODO this happens with symbolic links, need to look into it
+    except FileNotFoundError as e:
+        print(e)
+        # clean up the archival directory for this repo if it was already created
+        try:
+            shutil.rmtree(os.path.join(arch_dir, repo_dir.name))
+            print("Archive directory cleaned up")
+        except FileNotFoundError:
+            pass
+            print("No archive directory was created")
+
+
+def main():
     df, _ = db_handler.initialize()
     arch_dir = os.path.join('out', 'archive')
     zip_dir = os.path.join('out', 'zip')
@@ -74,29 +124,13 @@ if __name__ == "__main__":
     for entry in tqdm(repos):
         print()
         print(f"Processing {entry.name}...")
-        row_found = match_folder_to_row(entry.name, df)
-        if row_found is None:
-            continue
-        if row_found['Execs'] == '' or pd.isna(row_found['Execs']):
-            print("No executables!")
-            continue
-        if not row_found['On_disk']:
-            print("Source files not on disk!")
-            continue
-        try:
-            copy_source_files(entry.name, arch_dir)
-            copy_build_files(entry.name, arch_dir)
-        # TODO this happens with symbolic links, need to look into it
-        except FileNotFoundError as e:
-            print(e)
-            # clean up the archival directory for this repo if it was already created
-            try:
-                shutil.rmtree(os.path.join(arch_dir, entry.name))
-                print("Archive directory cleaned up")
-            except FileNotFoundError:
-                pass
-                print("No archive directory was created")
+        if is_archivable(entry.name, df):
+            process_repo(entry, arch_dir)
 
     # TODO fails when there are no execs because out/archive doesn't exist
     folders_to_zip(arch_dir, zip_dir, df)
     db_handler.wrapup(df)
+
+
+if __name__ == "__main__":
+    main()
