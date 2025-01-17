@@ -188,6 +188,9 @@ def save_dir_structure(top: str, fname: str, recurse: bool = True):
 def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
     """
     Given two files (before and after changes), list new paths that were added
+    :param before_file: Original file list (full paths)
+    :param after_file: Updated file list (full paths)
+    :return: List of file paths (full) that didn't exist in the original file
     """
     with open(before_file, 'r', encoding='utf-8') as f:
         before = set(f.read().splitlines())
@@ -197,14 +200,20 @@ def compare_dir_structure(before_file: str, after_file: str) -> list[str]:
 
 
 def move_compiled_files(compiled_paths: list[str], repo_folder: str):
+    """
+    Move files created during compilation to a new build directory
+    :param compiled_paths: Full paths to the new files created during compilation
+    :param repo_folder: Root directory of the repository
+    """
     for item_path in compiled_paths:
         if os.path.isfile(item_path):
             # file path relative to the repo folder
+            # if the file was outside the repo folder, it's treated as belonging to the repo root
             stripped_path = strip_path(item_path, repo_folder)
             # new folder that the file will be moved to, relative to cwd
             new_folder = os.path.join(BUILD_DIR, repo_folder, os.path.dirname(stripped_path))
             os.makedirs(new_folder, exist_ok=True)
-            # path directly to the file, relative to cwd
+            # new path for the file, relative to cwd
             new_file_path = os.path.join(BUILD_DIR, repo_folder, stripped_path)
             shutil.move(item_path, new_file_path)
             # only report new executables
@@ -214,13 +223,25 @@ def move_compiled_files(compiled_paths: list[str], repo_folder: str):
 
 def strip_path(file_path: str, repo_folder: str) -> str:
     """
-    Remove source directory prefix or cwd prefix from a filepath
+    Remove directory prefix from a filepath
+    - if the file is under the repo folder, make it relative to repo root
+    - if the file is under cwd, make it relative to cwd
+    - if the file is under the source directory (but not in its repo folder), make it relative to the source directory
+    - in all other cases strip down to the basename
     :param file_path: Path to file with a prefix
-    :param repo_folder: Name of the folder where the repo is saved ('owner-repo-123abc')
+    :param repo_folder: Name of the repo root folder ('owner-repo-123abc')
     :return: Path to file stripped of the prefix
     """
     cwd = os.getcwd()
-    return os.path.relpath(file_path, start=cwd if file_path.startswith(cwd) else os.path.join(SOURCE_DIR, repo_folder))
+    repo_folder_fullpath = os.path.join(SOURCE_DIR, repo_folder)
+    if file_path.startswith(repo_folder_fullpath):
+        return os.path.relpath(file_path, start=repo_folder_fullpath)
+    elif file_path.startswith(cwd):
+        return os.path.relpath(file_path, start=cwd)
+    elif file_path.startswith(SOURCE_DIR):
+        return os.path.relpath(file_path, start=SOURCE_DIR)
+    else:
+        return os.path.basename(file_path)
 
 
 def is_executable(filepath: str) -> bool:
@@ -288,6 +309,8 @@ def main():
         save_dir_structure(repo_path, before)
         # record cwd structure because sometimes files end up there
         save_dir_structure(os.getcwd(), before, recurse=False)
+        # record source directory structure for the same reason
+        save_dir_structure(SOURCE_DIR, before, recurse=False)
 
         # process, output, error
         result: list[str] = ['', '', '']
@@ -313,9 +336,12 @@ def main():
             elif cfiles:
                 result = run_gcc(repo_path, cfiles)
 
+        # record directory structure after compilation
         save_dir_structure(repo_path, after)
         save_dir_structure(os.getcwd(), after, recurse=False)
-        # this will contain full paths
+        save_dir_structure(SOURCE_DIR, after, recurse=False)
+
+        # the files passed as arguments contain full paths
         diff = compare_dir_structure(before, after)
 
         # format the output data/logs
