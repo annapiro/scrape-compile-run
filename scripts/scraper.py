@@ -102,11 +102,9 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             gc.collect()
             return
 
-    print("Fetching response from download url...")
     response = fetch_response(dwnld_url)
     zip_path = os.path.join(SAVE_DIR, repo_name.replace('/', '-') + '.zip')
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-    print("Writing zip file...")
     with open(zip_path, 'wb') as f:
         f.write(response.content)
     try:
@@ -115,11 +113,10 @@ def download_repo(repo_name: str, commit: str = None) -> str | None:
             # it should be the prefix of the first item on the list
             folder_name = f.namelist()[0].split('/')[0]
             # extract the zip file
-            print("Extracting zip...")
             f.extractall(SAVE_DIR)
     finally:
         os.remove(zip_path)
-    print(f"Downloaded {repo_name} ({dwnld_type}): {folder_name}")
+    print(f"    Done -> {folder_name}")
     gc.collect()
     return folder_name
 
