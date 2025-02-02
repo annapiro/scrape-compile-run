@@ -24,6 +24,8 @@ LOG_DIR = os.path.join('out', 'logs')
 BASE_ENDPOINT = 'https://api.github.com'
 HEADERS = {'Authorization': f'token {TOKEN}'}
 
+blacklist = set()  # list of ignored repos
+
 
 def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
     """
@@ -49,6 +51,9 @@ def is_eligible_repo(repo: Repository, v: bool = True) -> bool:
         if v:
             print("\nRepo already downloaded!")
         # log("duplicate")
+        return False
+    # check if the repo is blacklisted
+    if repo.full_name in blacklist:
         return False
     # limit by total size
     if SIZE_LIMIT != -1 and repo.size > SIZE_LIMIT:
@@ -305,7 +310,8 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 
 
 if __name__ == "__main__":
-    # TODO handle script termination
+    blacklist = db_handler.load_blacklist()
+    # TODO script termination
     while True:
         df, months = db_handler.initialize()
         next_month = get_next_month(months)

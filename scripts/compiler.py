@@ -338,6 +338,7 @@ def main():
 
         # record directory structure after compilation
         save_dir_structure(repo_path, after)
+        # TODO check cwd structure deeper than one level
         save_dir_structure(os.getcwd(), after, recurse=False)
         save_dir_structure(SOURCE_DIR, after, recurse=False)
 

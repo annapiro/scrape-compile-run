@@ -10,6 +10,7 @@ load_dotenv()
 DATA_DIR = 'data'
 DF_FILE = os.path.join(DATA_DIR, 'data.pkl')
 MONTHS_FILE = os.path.join(DATA_DIR, 'months_tracker.json')
+os.makedirs(DATA_DIR, exist_ok=True)
 
 
 def initialize() -> (pd.DataFrame, list[str]):
@@ -65,3 +66,13 @@ def load_months_tracker() -> list[str]:
 def update_months_tracker(months: list[str]):
     with open(MONTHS_FILE, 'wt', encoding="utf-8") as f:
         json.dump(months, f)
+
+
+def load_blacklist() -> set:
+    blacklist_path = os.path.join(DATA_DIR, 'blacklist.txt')
+    if not os.path.isfile(blacklist_path):
+        with open(blacklist_path, 'w') as f:
+            pass
+    with open(blacklist_path, 'r') as f:
+        blacklist = {line.strip() for line in f if line.strip()}
+    return blacklist
