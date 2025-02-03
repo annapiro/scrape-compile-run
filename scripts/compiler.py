@@ -122,7 +122,7 @@ def run_subprocess(command: list, cwd: str) -> (int, str, str):
         return None, stdout, stderr
     except Exception as e:
         print(e)
-        return None, None, str(e)
+        return None, "", str(e)
 
 
 # TODO return dict instead + add .a and .so files
@@ -279,12 +279,13 @@ def log_output(repo: str, last_comp: str, process: str, out: str, err: str, new_
 def main():
     # repos = os.scandir(SOURCE_DIR)
     os.makedirs(LOG_DIR, exist_ok=True)
-    df, _ = db_handler.initialize()
 
     # update on disk status of source repos before doing anything
     print("Check repos on disk:")
     execute_command('update')
     print()
+
+    df, _ = db_handler.initialize()
 
     # only iterate through the repos that are saved to disk
     filtered_df = df[df['On_disk']].copy()
