@@ -179,7 +179,9 @@ def save_dir_structure(top: str, fname: str, recurse: bool = True):
     """
     with open(fname, 'a', encoding='utf-8') as f:
         for root, dirs, files in os.walk(top):
+            root = root.encode('utf-8', 'replace').decode()
             for name in files:
+                name = name.encode('utf-8', 'replace').decode()
                 f.write(os.path.join(root, name) + '\n')
             if not recurse:
                 break
@@ -219,6 +221,8 @@ def move_compiled_files(compiled_paths: list[str], repo_folder: str):
             # only report new executables
             if is_executable(new_file_path):
                 print(f"New: {new_file_path}")
+        else:
+            print(f"Compiled file '{item_path}' not found in the filesystem anymore!!")
 
 
 def strip_path(file_path: str, repo_folder: str) -> str:
