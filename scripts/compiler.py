@@ -1,3 +1,4 @@
+import argparse
 import csv
 from datetime import datetime
 import os
@@ -17,6 +18,8 @@ load_dotenv()
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
 BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
 LOG_DIR = os.path.join('out', 'logs')
+
+V_FLAG = False  # verbosity setting
 
 
 def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
@@ -47,7 +50,7 @@ def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
 
     print(f"Run cmake: {cmake_dir}")
     command = ['cmake', '-S', source_rel, '-B', build_rel]
-    returncode, out, err = run_subprocess(command, repo_path)
+    returncode, out, err = run_subprocess(command, repo_path, v=V_FLAG)
 
     # logging
     process_log = 'cmake'
@@ -58,7 +61,7 @@ def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
 
     # build
     command = ['cmake', '--build', build_rel]
-    _, out, err = run_subprocess(command, repo_path)
+    _, out, err = run_subprocess(command, repo_path, v=V_FLAG)
 
     # logging
     process_log = 'cmake --build'
@@ -79,7 +82,7 @@ def run_make(make_path: str) -> (str, str, str):
     """
     print(f"Run make: {make_path}")
     command = ['make', 'V=1']
-    _, out, err = run_subprocess(command, make_path)
+    _, out, err = run_subprocess(command, make_path, v=V_FLAG)
     return command[0], out, err
 
 
@@ -93,12 +96,15 @@ def run_gcc(repo_path: str, cfiles: list) -> (str, str, str):
     cfiles_relative = [os.path.relpath(f, repo_path) for f in cfiles]
     print(f"Run gcc: {repo_path}")
     command = ['gcc'] + cfiles_relative + ['-o', output_file]
-    _, out, err = run_subprocess(command, repo_path)
+    _, out, err = run_subprocess(command, repo_path, v=V_FLAG)
     return command[0], out, err
 
 
-def run_subprocess(command: list, cwd: str) -> (int, str, str):
+def run_subprocess(command: list, cwd: str, v: bool = False) -> (int, str, str):
     """
+    :param command:
+    :param cwd:
+    :param v: Verbosity (default False)
     :return: subprocess return code, stdout and stderr
     """
     process = subprocess.Popen(command,
@@ -110,6 +116,11 @@ def run_subprocess(command: list, cwd: str) -> (int, str, str):
 
     try:
         stdout, stderr = process.communicate(timeout=180)
+        if v:
+            if stdout:
+                print(f"\nSTDOUT:\n{stdout}")
+            if stderr:
+                print(f"\nSTDERR:\n{stderr}")
         return process.returncode, stdout, stderr
     except subprocess.TimeoutExpired as e:
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)  # terminate the whole process group
@@ -119,6 +130,11 @@ def run_subprocess(command: list, cwd: str) -> (int, str, str):
             stdout, stderr = process.communicate(timeout=10)  # get any output after killing
         except subprocess.TimeoutExpired:
             stdout, stderr = None, "Timeout"
+        if v:
+            if stdout:
+                print(f"\nSTDOUT:\n\n{stdout}")
+            if stderr:
+                print(f"\nSTDERR:\n\n{stderr}")
         return None, stdout, stderr
     except Exception as e:
         print(e)
@@ -220,7 +236,7 @@ def move_compiled_files(compiled_paths: list[str], repo_folder: str):
             shutil.move(item_path, new_file_path)
             # only report new executables
             if is_executable(new_file_path):
-                print(f"New: {new_file_path}")
+                print(f"NEW: {new_file_path}")
         else:
             print(f"Compiled file '{item_path}' not found in the filesystem anymore!!")
 
@@ -249,7 +265,7 @@ def strip_path(file_path: str, repo_folder: str) -> str:
 
 
 def is_executable(filepath: str) -> bool:
-    _, output, _ = run_subprocess(command=['file', filepath], cwd='.')
+    _, output, _ = run_subprocess(command=['file', filepath], cwd='.', v=False)
     output = output.strip('\n')
     # trim the file name from the output
     file_description = output.split(': ', 1)[1].lower()
@@ -280,11 +296,15 @@ def log_output(repo: str, last_comp: str, process: str, out: str, err: str, new_
         writer.writerow([repo, last_comp, process, out, err, new_files, execs])
 
 
+def set_verbosity(v: bool):
+    global V_FLAG
+    V_FLAG = v
+
+
 def main():
-    # repos = os.scandir(SOURCE_DIR)
     os.makedirs(LOG_DIR, exist_ok=True)
 
-    # update on disk status of source repos before doing anything
+    # update on-disk status of source repos before doing anything
     print("Check repos on disk:")
     execute_command('update')
     print()
@@ -295,7 +315,7 @@ def main():
     filtered_df = df[df['On_disk']].copy()
 
     for index, row in tqdm(filtered_df.iterrows()):
-        print(" " + index)
+        print("\nSTART\t" + index)
         repo_folder = row['Folder']  # only root directory
         repo_path = os.path.join(SOURCE_DIR, repo_folder)  # full path
 
@@ -370,8 +390,12 @@ def main():
         move_compiled_files(diff, repo_folder)
         clean_up([before, after])
         db_handler.wrapup(data=df)
-        print(f"Done: {repo_folder}\n")
+        print(f"DONE\t{repo_folder}\n")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='store_true')
+    args = parser.parse_args()
+    set_verbosity(args.verbose)
     main()
