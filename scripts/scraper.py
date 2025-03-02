@@ -12,7 +12,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-import db_handler
+from . import db_handler
 
 load_dotenv()
 

@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 import pandas as pd
 from tqdm import tqdm
 
-from compiler import is_executable
-import db_handler
+from .compiler import is_executable
+from . import db_handler
 
 load_dotenv()
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))

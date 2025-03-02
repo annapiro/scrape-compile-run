@@ -71,6 +71,7 @@ def update_months_tracker(months: list[str]):
 def load_blacklist() -> set:
     blacklist_path = os.path.join(DATA_DIR, 'blacklist.txt')
     if not os.path.isfile(blacklist_path):
+        # create an empty blacklist file if it doesn't exist
         with open(blacklist_path, 'w') as f:
             pass
     with open(blacklist_path, 'r') as f:

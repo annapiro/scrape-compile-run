@@ -9,8 +9,8 @@ import subprocess
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-import db_handler
-from toggler import execute_command
+from . import db_handler
+from .toggler import execute_command
 
 load_dotenv()
 
@@ -20,7 +20,6 @@ BUILD_DIR = os.path.join(*os.getenv('COMPILE_DIR').split('/'))
 LOG_DIR = os.path.join('out', 'logs')
 
 V_FLAG = False  # verbosity setting
-
 
 def run_cmake(cmake_path: str, repo_path: str) -> (str, str, str):
     """

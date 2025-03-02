@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 import pandas as pd
 from requests.exceptions import HTTPError
 
-import db_handler
-from scraper import download_repo
+from . import db_handler
+from .scraper import download_repo
 
 load_dotenv()
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
