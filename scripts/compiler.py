@@ -234,10 +234,10 @@ def move_compiled_files(compiled_paths: list[str], repo_folder: str):
             new_file_path = os.path.join(BUILD_DIR, repo_folder, stripped_path)
             shutil.move(item_path, new_file_path)
             # only report new executables
-            if is_executable(new_file_path):
+            if is_executable(new_file_path, v=False):
                 print(f"NEW: {new_file_path}")
         else:
-            print(f"Compiled file '{item_path}' not found in the filesystem anymore!!")
+            print(f"Build file '{item_path}' not found in the filesystem anymore!!")
 
 
 def strip_path(file_path: str, repo_folder: str) -> str:
@@ -263,14 +263,19 @@ def strip_path(file_path: str, repo_folder: str) -> str:
         return os.path.basename(file_path)
 
 
-def is_executable(filepath: str) -> bool:
+def is_executable(filepath: str, v: bool = False) -> bool:
     _, output, _ = run_subprocess(command=['file', filepath], cwd='.', v=False)
     output = output.strip('\n')
-    # trim the file name from the output
+    if v and 'CMakeFiles' not in filepath:
+        print(output)
+    # trim the file path from the output
     file_description = output.split(': ', 1)[1].lower()
-    if 'executable' in file_description:
-        if 'text executable' not in file_description:
-            if 'CMakeFiles' not in filepath:
+    file_ext = os.path.splitext(filepath)[1]
+    if 'CMakeFiles' not in filepath:
+        if 'shared object' in file_description and file_ext != '.so':
+            return True
+        if 'executable' in file_description:
+            if 'text executable' not in file_description:
                 return True
     return False
 
@@ -376,14 +381,14 @@ def main():
         err = result[2].strip('\n ') if result[2] else ''
         # only store relative paths (cwd or repo prefix stripped)
         new_files = '\n'.join([strip_path(f, repo_folder) for f in diff])
-        execs = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
+        execs = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f, v=V_FLAG)])
 
         # log to csv
         log_output(index, last_comp, process, out, err, new_files, execs)
 
         # update the database
         df.at[index, 'Process'] = process
-        df.at[index, 'Execs'] = '\n'.join([strip_path(f, repo_folder) for f in diff if is_executable(f)])
+        df.at[index, 'Execs'] = execs
         df.at[index, 'Last_comp'] = str(datetime.now().replace(microsecond=0))
 
         move_compiled_files(diff, repo_folder)
@@ -394,7 +399,7 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('-v', '--verbose', action='store_true', help="Enable verbose output for the compilation process and the file type identification (Note: Files under the 'CMakeFiles' directory are ignored.)")
     args = parser.parse_args()
     set_verbosity(args.verbose)
     main()

@@ -15,13 +15,13 @@ trap wrapup SIGTERM
 
 while true; do
     printf "\n*** Download ***\n\n"
-    python3 scripts/toggler.py download --q "Last_comp.isna()" --size 100
+    python3 -m scripts.toggler download --q "Last_comp.isna()" --size 100
     printf "\n*** Compile ***\n\n"
-    python3 scripts/compiler.py
+    python3 -m scripts.compiler
     printf "\n*** Archive ***\n\n"
-    python3 scripts/archiver.py
+    python3 -m scripts.archiver
     printf "\n *** Clean up ***\n\n"
-    python3 scripts/toggler.py remove
+    python3 -m scripts.toggler remove
 
     if [ "$(ls -A out/source)" ]; then
         printf "\n*** Exiting because out/source is not empty ***\n"
