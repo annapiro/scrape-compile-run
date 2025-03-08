@@ -28,7 +28,7 @@ def _download_to_disk(row: pd.Series) -> (str, bool):
         updated_folder_name = download_repo(row.name, row['Commit'])
         folder_path = os.path.join(SOURCE_DIR, updated_folder_name)
     except HTTPError as e:
-        print(f"Could not download {row.name}, reason: {e}")
+        print(f"Could not download {row.name}: {e}")
         # folder name stays the same
         updated_folder_name = row['Folder']
     # return confirmation that the folder now exists
@@ -64,7 +64,7 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
     if not query:
         query = ''
 
-    # only download repos that aren't already on disk
+    # modify the query to only download repos that aren't already on disk
     if command == 'download':
         if query:
             query += ' and '
@@ -79,8 +79,14 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
     print(query)
     sub_df = df.query(query, inplace=False) if query else df.copy()
 
+    # no results found
+    if len(sub_df) == 0:
+        print("The query returned no results.")
+        return
+
     print(f"{len(sub_df.index)} rows matched the condition before sampling")
 
+    # if there are fewer query results than the requested sample size, take all of them
     if sample_size and sample_size <= len(sub_df):
         sub_df = sub_df.sample(n=sample_size)
 
@@ -94,10 +100,12 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
         # update those rows in the original dataframe
         df.loc[filtered_results.index, ['On_disk', 'Folder']] = filtered_results
         print(f"Successfully downloaded {len(filtered_results)} repos.")
+
     elif command == 'remove':
         result = sub_df.apply(_remove_from_disk, axis=1)
         df.loc[result.index, 'On_disk'] = result
         print(f"Successfully removed {len(result)} repos.")
+
     elif command == 'update':
         # store original values for reference
         original_on_disk = df['On_disk'].copy()
@@ -106,6 +114,7 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
         # count how many rows have a different value
         updated_count = (original_on_disk != df['On_disk']).sum()
         print(f"{updated_count} rows updated.")
+
     else:
         print("Invalid command. Please use 'download', 'remove' or 'update'.")
 

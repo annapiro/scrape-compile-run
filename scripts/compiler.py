@@ -399,7 +399,10 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='store_true', help="Enable verbose output for the compilation process and the file type identification (Note: Files under the 'CMakeFiles' directory are ignored.)")
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
+                        help="Enable verbose output for the compilation process and the file type identification "
+                             "(Note: Files under the 'CMakeFiles' directory are ignored.)")
     args = parser.parse_args()
     set_verbosity(args.verbose)
     main()
