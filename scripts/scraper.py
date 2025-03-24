@@ -1,3 +1,4 @@
+import argparse
 import csv
 import datetime
 import gc
@@ -309,12 +310,24 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
         return response
 
 
+def main():
+    df, months = db_handler.initialize()
+    next_month = get_next_month(months)
+    df = scrape_whole_month(df, next_month)
+    months.append(next_month)
+    db_handler.wrapup(df, months)
+
+
 if __name__ == "__main__":
     blacklist = db_handler.load_blacklist()
-    # TODO script termination
-    while True:
-        df, months = db_handler.initialize()
-        next_month = get_next_month(months)
-        df = scrape_whole_month(df, next_month)
-        months.append(next_month)
-        db_handler.wrapup(df, months)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--months', type=int, default=0,
+                        help='Number of months to scrape (defaults to 0 for no limit)')
+    args = parser.parse_args()
+
+    if args.months == 0:
+        while True:
+            main()
+    else:
+        for _ in range(args.months):
+            main()
