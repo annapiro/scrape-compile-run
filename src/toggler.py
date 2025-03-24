@@ -80,6 +80,7 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
     sub_df = df.query(query, inplace=False) if query else df.copy()
 
     # no results found
+    # TODO stop pipeline if nothing found
     if len(sub_df) == 0:
         print("The query returned no results.")
         return
