@@ -90,7 +90,7 @@ def is_archivable(repo_dir_name: str, df: pd.DataFrame) -> bool:
     row_found = match_folder_to_row(repo_dir_name, df)
     if row_found is None:
         return False
-    if row_found['Execs'] == '' or pd.isna(row_found['Execs']):
+    if pd.isna(row_found['Execs']) or row_found['Execs'] == '':
         print("No executables!")
         return False
     if not row_found['On_disk']:
