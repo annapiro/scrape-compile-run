@@ -9,7 +9,7 @@ import subprocess
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from . import db_handler
+from .db_handler import initialize, wrapup
 from .toggler import execute_command
 
 load_dotenv()
@@ -313,7 +313,7 @@ def main():
     execute_command('update')
     print()
 
-    df, _ = db_handler.initialize()
+    df, _ = initialize()
 
     # only iterate through the repos that are saved to disk
     filtered_df = df[df['On_disk']].copy()
@@ -393,7 +393,7 @@ def main():
 
         move_compiled_files(diff, repo_folder)
         clean_up([before, after])
-        db_handler.wrapup(data=df)
+        wrapup(data=df)
         print(f"DONE\t{repo_folder}\n")
 
 

@@ -13,6 +13,14 @@ MONTHS_FILE = os.path.join(DATA_DIR, 'months_tracker.json')
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
+class EmptyDatasetError(Exception):
+    """
+    Exception raised when the dataset is empty.
+    """
+    def __init__(self, msg="Dataset is empty! Run Scraper to populate it with data."):
+        super().__init__(msg)
+
+
 def initialize() -> (pd.DataFrame, list[str]):
     if os.path.isfile(DF_FILE):
         data = load_database()
@@ -77,3 +85,21 @@ def load_blacklist() -> set:
     with open(blacklist_path, 'r') as f:
         blacklist = {line.strip() for line in f if line.strip()}
     return blacklist
+
+
+def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
+    """
+    Find row in the dataframe that corresponds to the given source folder
+    :param folder_name: Folder to find in the dataframe
+    :param df: Dataframe
+    :return: pandas Series if found, otherwise None
+    """
+    matches = df.query(f"Folder == '{folder_name}'").copy()
+    if len(matches) == 0:
+        print(f"Folder '{folder_name}' not found in DataFrame")
+        return None
+    if len(matches) > 1:
+        print(f"Folder '{folder_name}' appears in DataFrame multiple times")
+        return None
+    # exactly one match found
+    return matches.iloc[0]

@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from . import db_handler
+from .db_handler import initialize, wrapup, load_blacklist
 
 load_dotenv()
 
@@ -209,7 +209,7 @@ def scrape_whole_month(df: pd.DataFrame, month: str, repo_limit: int = None) -> 
             break
 
         # save the dataframe to file after every page to avoid losing progress if the script breaks
-        db_handler.wrapup(data=df)
+        wrapup(data=df)
         page += 1
 
         # debug
@@ -311,15 +311,15 @@ def fetch_response(url: str, params: dict = None, raise_for_status: bool = True)
 
 
 def main():
-    df, months = db_handler.initialize()
+    df, months = initialize()
     next_month = get_next_month(months)
     df = scrape_whole_month(df, next_month)
     months.append(next_month)
-    db_handler.wrapup(df, months)
+    wrapup(df, months)
 
 
 if __name__ == "__main__":
-    blacklist = db_handler.load_blacklist()
+    blacklist = load_blacklist()
     parser = argparse.ArgumentParser()
     parser.add_argument('--months', type=int, default=0,
                         help='Number of months to scrape (defaults to 0 for no limit)')

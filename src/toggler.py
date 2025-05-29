@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from requests.exceptions import HTTPError
 
-from . import db_handler
+from .db_handler import initialize, wrapup
 from .scraper import download_repo
 
 load_dotenv()
@@ -60,7 +60,7 @@ def _update_download_status(row: pd.Series) -> bool:
 
 
 def execute_command(command: str, query: str = '', sample_size: int = None):
-    df, _ = db_handler.initialize()
+    df, _ = initialize()
     if not query:
         query = ''
 
@@ -119,7 +119,7 @@ def execute_command(command: str, query: str = '', sample_size: int = None):
     else:
         print("Invalid command. Please use 'download', 'remove' or 'update'.")
 
-    db_handler.wrapup(data=df)
+    wrapup(data=df)
 
 
 if __name__ == "__main__":

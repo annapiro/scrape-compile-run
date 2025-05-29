@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from .compiler import is_executable
-from . import db_handler
+from .db_handler import initialize, wrapup, match_folder_to_row
 
 load_dotenv()
 SOURCE_DIR = os.path.join(*os.getenv('SOURCE_DIR').split('/'))
@@ -59,24 +59,6 @@ def folders_to_zip(source: str, target: str, df: pd.DataFrame):
         df.at[row_found.name, 'Archived'] = True
 
 
-def match_folder_to_row(folder_name: str, df: pd.DataFrame) -> pd.Series | None:
-    """
-    Find row in the dataframe that corresponds to the given source folder
-    :param folder_name: Folder to find in the dataframe
-    :param df: Dataframe
-    :return: pandas Series if found, otherwise None
-    """
-    matches = df.query(f"Folder == '{folder_name}'").copy()
-    if len(matches) == 0:
-        print(f"Folder '{folder_name}' not found in DataFrame")
-        return None
-    if len(matches) > 1:
-        print(f"Folder '{folder_name}' appears in DataFrame multiple times")
-        return None
-    # exactly one match found
-    return matches.iloc[0]
-
-
 def is_archivable(repo_dir_name: str, df: pd.DataFrame) -> bool:
     """
     Check if the repo fulfills the requirements to be archived:
@@ -116,7 +98,7 @@ def process_repo(repo_dir: os.DirEntry, arch_dir: str):
 
 
 def main():
-    df, _ = db_handler.initialize()
+    df, _ = initialize()
     arch_dir = os.path.join('out', 'archive')
     zip_dir = os.path.join('out', 'zip')
 
@@ -132,7 +114,7 @@ def main():
 
     # TODO fails when there are no execs because out/archive doesn't exist
     folders_to_zip(arch_dir, zip_dir, df)
-    db_handler.wrapup(data=df)
+    wrapup(data=df)
 
 
 if __name__ == "__main__":
