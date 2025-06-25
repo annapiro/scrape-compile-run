@@ -7,6 +7,7 @@ import json
 import os
 import re
 
+import chardet
 from dotenv import load_dotenv
 from pycparser import parse_file
 
@@ -71,8 +72,21 @@ def main():
                 if not f.endswith('.c'):
                     continue
                 filepath = os.path.join(root, f)
-                with open(filepath, 'r') as code_file:
-                    code = code_file.read()
+
+                # read the file in binary mode to detect encoding
+                with open(filepath, 'rb') as bin_file:
+                    raw_data = bin_file.read()
+                result = chardet.detect(raw_data)
+                encoding = result['encoding']
+                # print(f"Detected encoding: {encoding} (confidence: {result['confidence']})")
+                
+                try:
+                    with open(filepath, 'r', encoding=encoding) as code_file:
+                        code = code_file.read()
+                except UnicodeDecodeError as e:
+                    print(f"Exception reading {os.path.join(root, f)} with encoding {encoding}: {e}")
+                    continue
+              
                 if not has_main_function(code):
                     continue
                 # TODO check the file for well-formedness (maybe with gcc?)
@@ -85,7 +99,7 @@ def main():
                     'code': code,
                 }
                 dataset_entries.append(new_entry)
-                df.at[df_row.name, 'In_dataset'] = True
+        df.at[df_row.name, 'In_dataset'] = True
 
     # after everything is done, write to a .jsonl file
     serialize_to_jsonl(dataset_entries, file_name='dataset.jsonl')
